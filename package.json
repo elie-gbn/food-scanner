@@ -1,0 +1,26 @@
+{
+  "name": "food-scanner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Scan a food barcode with your camera and see its caffeine and nutrition facts, looked up live.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "barcode-detector": "^3.0.0",
+    "next": "16.4.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.3",
+    "typescript": "^5"
+  }
+}
