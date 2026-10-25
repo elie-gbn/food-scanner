@@ -10,6 +10,9 @@ type Detector = { detect: (source: HTMLVideoElement) => Promise<Detected[]> };
 const FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e"];
 /* FDA guidance for healthy adults. */
 const CAFFEINE_DAILY_MG = 400;
+/* Names as app/api/food-scanner/route.ts returns them (Open Food Facts allergen tags, prefix stripped). */
+const ALLERGEN_CHOICES = ["gluten", "milk", "eggs", "peanuts", "nuts", "soybeans", "fish", "crustaceans", "molluscs", "sesame seeds", "celery", "mustard", "sulphur dioxide and sulphites", "lupin"];
+const ALLERGEN_STORAGE_KEY = "labelens-my-allergens";
 const EXAMPLES = [
   { code: "5449000000996", label: "Coca-Cola" },
   { code: "070847811169", label: "Monster" },
@@ -46,6 +49,7 @@ export function FoodScanner() {
   const [report, setReport] = useState<FoodReport | null>(null);
   const [busyCode, setBusyCode] = useState("");
   const [error, setError] = useState("");
+  const [myAllergens, setMyAllergens] = useState<string[]>([]);
   const [history, setHistory] = useState<{ barcode: string; name: string; caffeine: number | null }[]>([]);
 
   const lookup = useCallback(async (raw: string) => {
@@ -67,6 +71,26 @@ export function FoodScanner() {
       setBusyCode("");
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem(ALLERGEN_STORAGE_KEY) ?? "[]");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after hydration
+      if (Array.isArray(saved)) setMyAllergens(saved.filter((item): item is string => typeof item === "string"));
+    } catch {
+      // Storage can be blocked or hold bad JSON; start with no saved allergens.
+    }
+  }, []);
+
+  const toggleAllergen = (name: string) => {
+    const next = myAllergens.includes(name) ? myAllergens.filter((item) => item !== name) : [...myAllergens, name];
+    setMyAllergens(next);
+    try {
+      localStorage.setItem(ALLERGEN_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // Not persisted; the choice still applies until the page closes.
+    }
+  };
 
   const stopCamera = useCallback(() => {
     stream.current?.getTracks().forEach((track) => track.stop());
@@ -156,6 +180,8 @@ export function FoodScanner() {
   const caffeineShare = caffeineMain === null ? 0 : Math.min(100, (caffeineMain / CAFFEINE_DAILY_MG) * 100);
   const caffeineTone = caffeineMain === null ? "ok" : caffeineMain >= 200 ? "bad" : caffeineMain >= 100 ? "warn" : "ok";
 
+  const allergenHits = report ? report.allergens.filter((allergen) => myAllergens.includes(allergen.toLowerCase())) : [];
+
   return (
     <div className="tapp">
       <header className="tapp-header">
@@ -209,6 +235,16 @@ export function FoodScanner() {
             <span className="tapp-muted">Try:</span>
             {EXAMPLES.map((example) => <button key={example.code} className="tapp-btn tapp-btn-sm" onClick={() => void lookup(example.code)} disabled={!!busyCode}>{example.label}</button>)}
           </div>
+          <details style={{ marginTop: ".75rem" }}>
+            <summary className="tapp-muted" style={{ cursor: "pointer" }}>My allergens{myAllergens.length > 0 && ` (${myAllergens.length})`}</summary>
+            <div className="tapp-row" style={{ marginTop: ".5rem" }}>
+              {ALLERGEN_CHOICES.map((name) => (
+                <label key={name} className="tapp-small" style={{ display: "inline-flex", gap: ".3rem", alignItems: "center" }}>
+                  <input type="checkbox" checked={myAllergens.includes(name)} onChange={() => toggleAllergen(name)} />{name}
+                </label>
+              ))}
+            </div>
+          </details>
           {error && <div className="tapp-notice is-bad" style={{ marginTop: "1rem", marginBottom: 0 }}><span>✕</span><span>{error}</span></div>}
         </section>
 
@@ -220,6 +256,11 @@ export function FoodScanner() {
             </div>
           ) : (
             <>
+              {allergenHits.length > 0 ? (
+                <div className="tapp-notice is-bad" role="alert" style={{ marginBottom: "1rem" }}><span>⚠</span><span><strong>Contains your allergens:</strong> {allergenHits.join(", ")}</span></div>
+              ) : myAllergens.length > 0 && (
+                <div className="tapp-notice" style={{ marginBottom: "1rem" }}><span>✓</span><span>None of your allergens are listed for this product. Lists can be incomplete, so check the label.</span></div>
+              )}
               <div className="food-product">
                 {/* eslint-disable-next-line @next/next/no-img-element -- remote product photos from Open Food Facts */}
                 {report.image && <img src={report.image} alt="" />}
