@@ -39,7 +39,7 @@ Next.js 16.4.3, React 19.3.0, TypeScript 5, ESLint 9. There is no test runner ye
 - [x] 5. Verdict banner and evidence in the result
 - **Checkpoint A (human):** scan 5 real products and compare against their physical labels.
 - [x] 6. Ingredient translation (taxonomy-based, original always visible)
-- [ ] 7. Not-found, no-data and failure states
+- [x] 7. Not-found, no-data and failure states
 - [ ] 8. Phone and accessibility pass, README and disclaimer
 - **Checkpoint B (human):** try on a phone over HTTPS before sharing.
 

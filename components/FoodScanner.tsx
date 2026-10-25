@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FoodReport } from "@/lib/report";
 import { highlightTerms } from "@/lib/diet";
+import { classifyLookup, watchFor, type LookupFailure } from "@/lib/lookup";
 import { isEmptyProfile } from "@/lib/profile";
 import { ingredientView, LANGUAGES, translateUrl } from "@/lib/translate";
 import { assessData, evaluate, headline } from "@/lib/verdict";
 import { ProfileSetup } from "./ProfileSetup";
+import { LookupProblem } from "./LookupProblem";
 import { VerdictBanner } from "./VerdictBanner";
 import { useProfile } from "./useProfile";
 
@@ -55,6 +57,7 @@ export function FoodScanner() {
   const [report, setReport] = useState<FoodReport | null>(null);
   const [busyCode, setBusyCode] = useState("");
   const [error, setError] = useState("");
+  const [failure, setFailure] = useState<LookupFailure | null>(null);
   const { profile, setProfile } = useProfile();
   const [history, setHistory] = useState<{ barcode: string; name: string; caffeine: number | null }[]>([]);
 
@@ -64,15 +67,21 @@ export function FoodScanner() {
     lastLookup.current = code;
     setBusyCode(code);
     setError("");
+    setFailure(null);
+    // Never leave the previous product on screen while another one is being looked up or has failed.
+    setReport(null);
     try {
       const response = await fetch(`/api/food-scanner?barcode=${code}`);
-      const result = await response.json() as FoodReport & { error?: string };
-      if (!response.ok) throw new Error(result.error ?? "Lookup failed.");
+      const result = await response.json().catch(() => ({})) as FoodReport & { error?: string };
+      if (!response.ok) {
+        setFailure(classifyLookup(response.status, code, result.error ?? null));
+        return;
+      }
       setReport(result);
       const caffeine = result.caffeine.perServing ?? result.caffeine.perContainer;
       setHistory((current) => [{ barcode: result.barcode, name: result.name, caffeine }, ...current.filter((item) => item.barcode !== result.barcode)].slice(0, 10));
-    } catch (cause) {
-      setError(`${code}: ${cause instanceof Error ? cause.message : "Lookup failed."}`);
+    } catch {
+      setFailure(classifyLookup(null, code));
     } finally {
       setBusyCode("");
     }
@@ -234,10 +243,12 @@ export function FoodScanner() {
         </section>
 
         <section className="tapp-panel food-results" aria-live="polite">
-          {!report ? (
+          {!report && failure ? (
+            <LookupProblem failure={failure} words={watchFor(profile)} onRetry={() => void lookup(failure.code)} busy={!!busyCode} />
+          ) : !report ? (
             <div className="tapp-empty">
               <p style={{ fontSize: "2rem", margin: 0 }} aria-hidden="true">▦</p>
-              <p>Your result will show up here.</p>
+              <p>{busyCode ? `Looking up ${busyCode}…` : "Your result will show up here."}</p>
             </div>
           ) : (
             <>

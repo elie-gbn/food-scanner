@@ -7,6 +7,6 @@
 - [x] 5. Verdict banner and evidence in the result
 - [ ] Checkpoint A: scan 5 real products, compare against the labels
 - [x] 6. Ingredient translation (taxonomy chips + original text)
-- [ ] 7. Not-found, no-data and failure states
+- [x] 7. Not-found, no-data and failure states
 - [ ] 8. Phone, accessibility, README and disclaimer
 - [ ] Checkpoint B: try on a phone over HTTPS
