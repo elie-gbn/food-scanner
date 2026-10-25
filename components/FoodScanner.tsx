@@ -41,7 +41,6 @@ export function FoodScanner() {
 
   const [cameraState, setCameraState] = useState<"idle" | "starting" | "live" | "error">("idle");
   const [cameraError, setCameraError] = useState("");
-  const [engine, setEngine] = useState("");
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [deviceId, setDeviceId] = useState("");
   const [box, setBox] = useState<{ points: Point[]; width: number; height: number } | null>(null);
@@ -120,9 +119,7 @@ export function FoodScanner() {
         await video.current.play();
       }
       if (!detector.current) {
-        const created = await createDetector();
-        detector.current = created.detector;
-        setEngine(created.native ? "Native BarcodeDetector" : "ZXing WebAssembly");
+        detector.current = (await createDetector()).detector;
       }
       const all = await navigator.mediaDevices.enumerateDevices();
       setDevices(all.filter((device) => device.kind === "videoinput"));
@@ -187,20 +184,19 @@ export function FoodScanner() {
       <header className="tapp-header">
         <span className="tapp-brand">
           <span className="tapp-brand-mark" aria-hidden="true">▦</span>
-          <span>Labelens<small>FOOD SCANNER</small></span>
+          <span>Labelens</span>
         </span>
       </header>
       <div className="tapp-title">
-        <p className="tapp-eyebrow">CAMERA BARCODE SCAN · OPEN FOOD FACTS · USDA FOODDATA CENTRAL</p>
-        <h1>Caffeine &amp; nutrition scanner</h1>
-        <p className="tapp-muted">Point your camera at a product barcode. Each code is looked up live, and the caffeine and nutrition facts show up next to the camera.</p>
+        <h1>Scan a food barcode</h1>
+        <p className="tapp-muted">Point your camera at a barcode to see caffeine, nutrition and allergens.</p>
       </div>
 
       <div className="food-layout">
         <section className="tapp-panel">
           <div className="tapp-panel-head">
             <h2>Camera</h2>
-            <span className={`tapp-badge ${cameraState === "live" ? "ok" : cameraState === "error" ? "bad" : "info"}`}>{cameraState === "live" ? "SCANNING" : cameraState.toUpperCase()}</span>
+            {cameraState === "live" && <span className="tapp-badge ok">Scanning</span>}
           </div>
           <div className={`food-viewport${cameraState === "live" ? " is-live" : ""}`}>
             <video ref={video} playsInline muted aria-label="Camera feed" />
@@ -225,21 +221,20 @@ export function FoodScanner() {
                 {devices.map((device, index) => <option key={device.deviceId} value={device.deviceId}>{device.label || `Camera ${index + 1}`}</option>)}
               </select>
             )}
-            {engine && <span className="tapp-small tapp-muted">{engine}</span>}
           </div>
           <form className="tapp-row" style={{ marginTop: ".75rem" }} onSubmit={(event) => { event.preventDefault(); void lookup(manual); }}>
             <input className="tapp-input" style={{ flex: "1 1 12rem" }} value={manual} onChange={(event) => setManual(event.target.value)} placeholder="Or type a barcode" aria-label="Barcode" inputMode="numeric" autoComplete="off" />
             <button className="tapp-btn" type="submit" disabled={!!busyCode || !manual.trim()}>Look up</button>
           </form>
           <div className="tapp-row tapp-small" style={{ marginTop: ".6rem" }}>
-            <span className="tapp-muted">Try:</span>
+            <span className="tapp-muted">Try an example:</span>
             {EXAMPLES.map((example) => <button key={example.code} className="tapp-btn tapp-btn-sm" onClick={() => void lookup(example.code)} disabled={!!busyCode}>{example.label}</button>)}
           </div>
           <details style={{ marginTop: ".75rem" }}>
-            <summary className="tapp-muted" style={{ cursor: "pointer" }}>My allergens{myAllergens.length > 0 && ` (${myAllergens.length})`}</summary>
-            <div className="tapp-row" style={{ marginTop: ".5rem" }}>
+            <summary style={{ cursor: "pointer", fontWeight: 600 }}>My allergens{myAllergens.length > 0 && ` (${myAllergens.length})`}</summary>
+            <div className="food-allergens">
               {ALLERGEN_CHOICES.map((name) => (
-                <label key={name} className="tapp-small" style={{ display: "inline-flex", gap: ".3rem", alignItems: "center" }}>
+                <label key={name} className="food-chip tapp-small">
                   <input type="checkbox" checked={myAllergens.includes(name)} onChange={() => toggleAllergen(name)} />{name}
                 </label>
               ))}
@@ -252,7 +247,7 @@ export function FoodScanner() {
           {!report ? (
             <div className="tapp-empty">
               <p style={{ fontSize: "2rem", margin: 0 }} aria-hidden="true">▦</p>
-              <p>Scan a barcode to see its caffeine and nutrition facts here.</p>
+              <p>Your result will show up here.</p>
             </div>
           ) : (
             <>
@@ -269,7 +264,7 @@ export function FoodScanner() {
                   <p className="tapp-muted" style={{ margin: ".15rem 0 .4rem" }}>{[report.brand, report.quantity].filter(Boolean).join(" · ") || "Unknown brand"}</p>
                   <div className="tapp-row">
                     <span className="tapp-badge">{report.barcode}</span>
-                    {report.nutriscore && <span className={`tapp-badge ${"ab".includes(report.nutriscore) ? "ok" : report.nutriscore === "c" ? "warn" : "bad"}`}>NUTRI-SCORE {report.nutriscore.toUpperCase()}</span>}
+                    {report.nutriscore && <span className={`tapp-badge ${"ab".includes(report.nutriscore) ? "ok" : report.nutriscore === "c" ? "warn" : "bad"}`}>Nutri-Score {report.nutriscore.toUpperCase()}</span>}
                     {report.nova && <span className={`tapp-badge ${report.nova <= 2 ? "ok" : report.nova === 3 ? "warn" : "bad"}`}>NOVA {report.nova}</span>}
                   </div>
                 </div>
@@ -278,7 +273,7 @@ export function FoodScanner() {
               <div className="food-caffeine">
                 <div className="tapp-spread" style={{ alignItems: "flex-end" }}>
                   <div>
-                    <span className="tapp-label">CAFFEINE{caffeine?.perServing !== null ? " PER SERVING" : caffeine?.perContainer !== null ? " PER CONTAINER" : ""}</span>
+                    <span className="tapp-label">Caffeine{caffeine?.perServing !== null ? " per serving" : caffeine?.perContainer !== null ? " per container" : ""}</span>
                     {caffeineMain !== null ? (
                       <div className={`tapp-score ${caffeineTone}`}><strong>{Math.round(caffeineMain)}</strong><span>mg</span></div>
                     ) : caffeine && caffeine.per100 !== null ? (
@@ -286,7 +281,7 @@ export function FoodScanner() {
                     ) : caffeine?.signals.length ? (
                       <p style={{ margin: ".3rem 0 0", color: "var(--t-warn)" }}>Contains caffeine, but the amount isn&apos;t published</p>
                     ) : (
-                      <p style={{ margin: ".3rem 0 0", color: "var(--t-hot)" }}>No caffeine sources found</p>
+                      <p style={{ margin: ".3rem 0 0", color: "var(--t-accent)" }}>No caffeine found</p>
                     )}
                   </div>
                   {caffeine && (caffeine.perServing !== null || caffeine.perContainer !== null || caffeine.per100 !== null) && (
@@ -309,13 +304,13 @@ export function FoodScanner() {
               <div className="tapp-panel-head" style={{ marginTop: "1rem" }}><h2>Nutrition</h2>{report.servingSize && <span className="tapp-small tapp-muted">Serving: {report.servingSize}</span>}</div>
               {report.nutrients.length ? (
                 <div className="tapp-table-wrap"><table className="tapp-table">
-                  <thead><tr><th>NUTRIENT</th><th>PER {report.basis.toUpperCase()}</th><th>PER SERVING</th></tr></thead>
+                  <thead><tr><th>Nutrient</th><th>Per {report.basis}</th><th>Per serving</th></tr></thead>
                   <tbody>{report.nutrients.map((item) => <tr key={item.key}><td>{item.label}</td><td>{fmt(item.per100, item.unit)}</td><td>{fmt(item.perServing, item.unit)}</td></tr>)}</tbody>
                 </table></div>
               ) : <p className="tapp-muted tapp-small">No nutrition facts have been published for this product yet.</p>}
 
-              {report.allergens.length > 0 && <p style={{ marginTop: "1rem" }}><span className="tapp-label">ALLERGENS </span>{report.allergens.map((allergen) => <span key={allergen} className="tapp-badge warn" style={{ marginRight: ".3rem" }}>{allergen.toUpperCase()}</span>)}</p>}
-              {report.ingredients && <details style={{ marginTop: "1rem" }}><summary className="tapp-muted" style={{ cursor: "pointer" }}>Ingredients</summary><p className="tapp-small" style={{ marginBottom: 0 }}>{report.ingredients}</p></details>}
+              {report.allergens.length > 0 && <p style={{ marginTop: "1rem" }}><span className="tapp-label">Allergens</span>{report.allergens.map((allergen) => <span key={allergen} className="tapp-badge warn" style={{ marginRight: ".3rem", textTransform: "capitalize" }}>{allergen}</span>)}</p>}
+              {report.ingredients && <details style={{ marginTop: "1rem" }}><summary style={{ cursor: "pointer", fontWeight: 600 }}>Ingredients</summary><p className="tapp-small" style={{ marginBottom: 0 }}>{report.ingredients}</p></details>}
               <p className="tapp-small tapp-muted" style={{ marginTop: "1rem", marginBottom: 0 }}>Source: {report.sources.map((source, index) => <span key={source.name}>{index > 0 && " + "}<a href={source.url} target="_blank" rel="noreferrer">{source.name}</a></span>)} · {new Date(report.checkedAt).toLocaleTimeString()}</p>
             </>
           )}
@@ -324,14 +319,14 @@ export function FoodScanner() {
 
       {history.length > 0 && (
         <section className="tapp-panel" style={{ marginTop: "1rem" }}>
-          <div className="tapp-panel-head"><h2>Scanned this session</h2></div>
+          <div className="tapp-panel-head"><h2>Recent scans</h2></div>
           <div className="tapp-table-wrap"><table className="tapp-table">
-            <thead><tr><th>PRODUCT</th><th>BARCODE</th><th>CAFFEINE</th></tr></thead>
+            <thead><tr><th>Product</th><th>Barcode</th><th>Caffeine</th></tr></thead>
             <tbody>{history.map((item) => <tr key={item.barcode} className={`is-clickable${item.barcode === report?.barcode ? " is-selected" : ""}`} onClick={() => void lookup(item.barcode)}><td className="wrap">{item.name}</td><td>{item.barcode}</td><td>{fmt(item.caffeine, "mg")}</td></tr>)}</tbody>
           </table></div>
         </section>
       )}
-      <footer className="tapp-footer"><span>Labelens · live product lookups</span><span>Data is crowd-sourced and may be incomplete. Check the label when it matters.</span></footer>
+      <footer className="tapp-footer"><span>Product data is crowd-sourced and can be incomplete. Check the label when it matters.</span></footer>
     </div>
   );
 }
