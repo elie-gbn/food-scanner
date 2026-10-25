@@ -32,11 +32,11 @@ Next.js 16.4.3, React 19.3.0, TypeScript 5, ESLint 9. There is no test runner ye
 - Rate limit is in-memory per server instance, so it does not hold on serverless. This is not a safety issue.
 
 ## Tasks
-- [ ] 1. Test runner and diet rules module (pure)
-- [ ] 2. API returns the language-neutral ingredient, trace and label tags
-- [ ] 3. Verdict engine: report + profile -> findings
-- [ ] 4. Profile setup UI: allergens, diets, custom words (with migration)
-- [ ] 5. Verdict banner and evidence in the result
+- [x] 1. Test runner and diet rules module (pure)
+- [x] 2. API returns the language-neutral ingredient, trace and label tags
+- [x] 3. Verdict engine: report + profile -> findings
+- [x] 4. Profile setup UI: allergens, diets, custom words (with migration)
+- [x] 5. Verdict banner and evidence in the result
 - **Checkpoint A (human):** scan 5 real products and compare against their physical labels.
 - [ ] 6. Ingredient translation (taxonomy-based, original always visible)
 - [ ] 7. Not-found, no-data and failure states

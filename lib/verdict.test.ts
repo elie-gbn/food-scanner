@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildReport, type FoodReport, type OffProduct } from "./report";
-import { assessData, evaluate, type Profile } from "./verdict";
+import { assessData, evaluate, headline, type Profile } from "./verdict";
 import fixtures from "./fixtures/products.json";
 
 const products = fixtures as unknown as Record<string, OffProduct & { code: string }>;
@@ -112,5 +112,30 @@ describe("evaluate: custom words, order and empty profile", () => {
     const statuses = evaluate(report("cream-cheese"), profile({ diets: ["pork-free", "vegetarian", "vegan"], allergens: ["milk", "nuts"] })).map((f) => f.status);
     expect(statuses).toEqual([...statuses].sort((a, b) => order.indexOf(a) - order.indexOf(b)));
     expect(statuses[0]).toBe("contains");
+  });
+});
+
+describe("headline", () => {
+  const head = (name: string, p: Partial<Profile>) => headline(evaluate(report(name), profile(p)));
+
+  it("says what it contains, worst status first", () => {
+    expect(head("lentils-pork-lard", { diets: ["pork-free"], allergens: ["nuts"] })).toEqual({ status: "contains", text: "Contains pork" });
+  });
+  it("joins several hits", () => {
+    expect(head("lentils-pork-lard", { diets: ["pork-free"], allergens: ["milk"] })?.text).toBe("Contains pork and milk");
+  });
+  it("says may contain when the source is not stated", () => {
+    expect(head("gummy-worms", { diets: ["pork-free"] })).toEqual({ status: "may-contain", text: "May contain pork" });
+  });
+  it("says it cannot tell when the data is thin, never 'safe'", () => {
+    expect(head("nutella", { diets: ["vegan"] })).toEqual({ status: "unknown", text: "Can't tell: check the label" });
+  });
+  it("says 'not found in the listed ingredients' for a clean full list, never 'safe'", () => {
+    const text = head("coca-cola", { diets: ["pork-free"] })?.text ?? "";
+    expect(text).toBe("Not found in the listed ingredients");
+    expect(text).not.toMatch(/safe/i);
+  });
+  it("has no headline for an empty profile", () => {
+    expect(head("coca-cola", {})).toBeNull();
   });
 });

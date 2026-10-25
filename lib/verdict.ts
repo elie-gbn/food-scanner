@@ -12,6 +12,8 @@ export type Finding = {
   status: Status;
   /** Why this status, one line per hit, e.g. "lard (in ingredients)". */
   evidence: string[];
+  /** Words to highlight in the ingredient text. */
+  terms: string[];
   /** Extra context that never changes the status: labels, unknown flavour origin, data gaps. */
   notes: string[];
 };
@@ -78,14 +80,15 @@ export function evaluate(report: FoodReport, profile: Profile): Finding[] {
 
   return restrictions(profile).map((rule): Finding => {
     const evidence: string[] = [];
+    const terms: string[] = [];
     const notes: string[] = [];
     let status = "clear" as Status;
     const raise = (next: Status) => { if (ORDER[next] < ORDER[status]) status = next; };
 
     const inListed: Match[] = matchRule(rule, { tags: report.ingredientTags, text: `${listed} ; ${tagText}` });
     for (const match of inListed) {
-      if (match.strength === "contains") { raise("contains"); evidence.push(`${match.term} (in ingredients)`); }
-      else if (match.strength === "possible") { raise("may-contain"); evidence.push(`${match.term} (in ingredients; source not stated)`); }
+      if (match.strength === "contains") { raise("contains"); evidence.push(`${match.term} (in ingredients)`); terms.push(match.term); }
+      else if (match.strength === "possible") { raise("may-contain"); evidence.push(`${match.term} (in ingredients; source not stated)`); terms.push(match.term); }
       else notes.push("Flavourings are listed without saying what they come from.");
     }
 
@@ -95,6 +98,7 @@ export function evaluate(report: FoodReport, profile: Profile): Finding[] {
       if (match.strength === "note") continue;
       raise("may-contain");
       evidence.push(`${match.term} (may contain traces)`);
+      terms.push(match.term);
     }
 
     // Open Food Facts' own vegan / vegetarian guess can add a hit, never remove one.
@@ -107,6 +111,29 @@ export function evaluate(report: FoodReport, profile: Profile): Finding[] {
 
     if (status === "clear" && quality.state !== "ok") status = "unknown";
     if (status !== "contains") notes.push(...quality.reasons);
-    return { restriction: rule.id, label: rule.label, status, evidence: dedupe(evidence), notes: dedupe(notes) };
+    return { restriction: rule.id, label: rule.label, status, evidence: dedupe(evidence), terms: dedupe(terms), notes: dedupe(notes) };
   }).sort((a, b) => ORDER[a.status] - ORDER[b.status]);
+}
+
+/* What to call a hit in the banner: "Contains pork", "Contains milk", "Not halal". */
+const HIT_PHRASE: Record<string, string> = { "pork-free": "pork", halal: "ingredients that are not halal", vegetarian: "meat or fish ingredients", vegan: "animal products" };
+const MAYBE_PHRASE: Record<string, string> = { "pork-free": "pork", halal: "ingredients that may not be halal", vegetarian: "ingredients that may not be vegetarian", vegan: "ingredients that may not be vegan" };
+
+export function phrase(finding: Finding) {
+  const table = finding.status === "contains" ? HIT_PHRASE : MAYBE_PHRASE;
+  return table[finding.restriction] ?? finding.label;
+}
+
+export type Headline = { status: Status; text: string };
+
+/** The one line that goes at the top of the result. Never says "safe". */
+export function headline(findings: Finding[]): Headline | null {
+  if (!findings.length) return null;
+  const worst = findings[0].status;
+  const names = findings.filter((f) => f.status === worst).map(phrase);
+  const list = names.length > 2 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names.join(" and ");
+  if (worst === "contains") return { status: worst, text: `Contains ${list}` };
+  if (worst === "may-contain") return { status: worst, text: `May contain ${list}` };
+  if (worst === "unknown") return { status: worst, text: "Can't tell: check the label" };
+  return { status: worst, text: "Not found in the listed ingredients" };
 }

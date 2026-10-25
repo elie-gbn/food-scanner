@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { customRule, matchRule, ruleById } from "./diet";
+import { customRule, highlightTerms, matchRule, ruleById } from "./diet";
 
 const run = (id: string, text: string, tags: string[] = []) => matchRule(ruleById(id)!, { text, tags });
 const strengths = (id: string, text: string, tags: string[] = []) => run(id, text, tags).map((m) => `${m.strength}:${m.term}`);
@@ -102,5 +102,20 @@ describe("custom words", () => {
   });
   it("matches a Thai word as a substring", () => {
     expect(matchRule(customRule("หมู"), { text: "เนื้อหมูบด", tags: [] })).toHaveLength(1);
+  });
+});
+
+describe("highlightTerms", () => {
+  it("splits text into plain and matched pieces", () => {
+    expect(highlightTerms("flour, Lard, salt", ["lard"])).toEqual([{ text: "flour, ", hit: false }, { text: "Lard", hit: true }, { text: ", salt", hit: false }]);
+  });
+  it("does not highlight inside other words", () => {
+    expect(highlightTerms("hamburger bun", ["ham"])).toEqual([{ text: "hamburger bun", hit: false }]);
+  });
+  it("highlights Thai terms as substrings", () => {
+    expect(highlightTerms("เนื้อหมูบด", ["หมู"]).filter((piece) => piece.hit)).toEqual([{ text: "หมู", hit: true }]);
+  });
+  it("returns the whole text when there is nothing to highlight", () => {
+    expect(highlightTerms("water", [])).toEqual([{ text: "water", hit: false }]);
   });
 });

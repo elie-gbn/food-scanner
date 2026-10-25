@@ -391,3 +391,8 @@ body {
 .food-group legend { padding: 0; }
 button.food-chip { background: var(--t-surface); color: var(--t-ink); font: inherit; text-transform: none; }
 .food-chip .tapp-muted { text-transform: none; }
+.food-verdict.is-warn { background: var(--t-warn-soft); color: var(--t-warn); }
+.food-verdict.is-unknown { background: var(--t-bg); color: var(--t-ink); border: 1px solid var(--t-line); }
+.food-verdict-head { margin: 0; font-size: 1.35rem; font-weight: 800; line-height: 1.25; text-transform: uppercase; letter-spacing: .01em; }
+.food-verdict-list { margin: .6rem 0 0; padding: 0; list-style: none; display: grid; gap: .35rem; }
+mark.food-hit { background: var(--t-bad-soft); color: var(--t-bad); font-weight: 700; padding: 0 .15em; border-radius: .2em; }

@@ -1,8 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FoodReport } from "@/lib/report";
+import { highlightTerms } from "@/lib/diet";
+import { isEmptyProfile } from "@/lib/profile";
+import { assessData, evaluate, headline } from "@/lib/verdict";
 import { ProfileSetup } from "./ProfileSetup";
+import { VerdictBanner } from "./VerdictBanner";
 import { useProfile } from "./useProfile";
 
 type Point = { x: number; y: number };
@@ -51,7 +55,6 @@ export function FoodScanner() {
   const [busyCode, setBusyCode] = useState("");
   const [error, setError] = useState("");
   const { profile, setProfile } = useProfile();
-  const myAllergens = profile.allergens;
   const [history, setHistory] = useState<{ barcode: string; name: string; caffeine: number | null }[]>([]);
 
   const lookup = useCallback(async (raw: string) => {
@@ -164,7 +167,10 @@ export function FoodScanner() {
   const caffeineShare = caffeineMain === null ? 0 : Math.min(100, (caffeineMain / CAFFEINE_DAILY_MG) * 100);
   const caffeineTone = caffeineMain === null ? "ok" : caffeineMain >= 200 ? "bad" : caffeineMain >= 100 ? "warn" : "ok";
 
-  const allergenHits = report ? report.allergens.filter((allergen) => myAllergens.includes(allergen.toLowerCase())) : [];
+  const findings = useMemo(() => report ? evaluate(report, profile) : [], [report, profile]);
+  const quality = useMemo(() => report ? assessData(report) : { state: "ok" as const, reasons: [] }, [report]);
+  const highlights = useMemo(() => findings.flatMap((finding) => finding.status === "contains" || finding.status === "may-contain" ? finding.terms : []), [findings]);
+  const hasHit = findings.some((finding) => finding.status === "contains" || finding.status === "may-contain");
 
   return (
     <div className="tapp">
@@ -231,11 +237,7 @@ export function FoodScanner() {
             </div>
           ) : (
             <>
-              {allergenHits.length > 0 ? (
-                <div className="tapp-notice is-bad" role="alert" style={{ marginBottom: "1rem" }}><span>⚠</span><span><strong>Contains your allergens:</strong> {allergenHits.join(", ")}</span></div>
-              ) : myAllergens.length > 0 && (
-                <div className="tapp-notice" style={{ marginBottom: "1rem" }}><span>✓</span><span>None of your allergens are listed for this product. Lists can be incomplete, so check the label.</span></div>
-              )}
+              <VerdictBanner headline={headline(findings)} findings={findings} quality={quality} hasProfile={!isEmptyProfile(profile)} />
               <div className="food-product">
                 {/* eslint-disable-next-line @next/next/no-img-element -- remote product photos from Open Food Facts */}
                 {report.image && <img src={report.image} alt="" />}
@@ -290,7 +292,12 @@ export function FoodScanner() {
               ) : <p className="tapp-muted tapp-small">No nutrition facts have been published for this product yet.</p>}
 
               {report.allergens.length > 0 && <p style={{ marginTop: "1rem" }}><span className="tapp-label">Allergens</span>{report.allergens.map((allergen) => <span key={allergen} className="tapp-badge warn" style={{ marginRight: ".3rem", textTransform: "capitalize" }}>{allergen}</span>)}</p>}
-              {report.ingredients && <details style={{ marginTop: "1rem" }}><summary style={{ cursor: "pointer", fontWeight: 600 }}>Ingredients</summary><p className="tapp-small" style={{ marginBottom: 0 }}>{report.ingredients}</p></details>}
+              {report.ingredients ? (
+                <details key={`${report.barcode}-${hasHit}`} open={hasHit} style={{ marginTop: "1rem" }}>
+                  <summary style={{ cursor: "pointer", fontWeight: 600 }}>Ingredients</summary>
+                  <p className="tapp-small" style={{ marginBottom: 0 }}>{highlightTerms(report.ingredients, highlights).map((piece, index) => piece.hit ? <mark key={index} className="food-hit">{piece.text}</mark> : piece.text)}</p>
+                </details>
+              ) : <p className="tapp-small tapp-muted" style={{ marginTop: "1rem" }}>No ingredient list is published for this product.</p>}
               <p className="tapp-small tapp-muted" style={{ marginTop: "1rem", marginBottom: 0 }}>Source: {report.sources.map((source, index) => <span key={source.name}>{index > 0 && " + "}<a href={source.url} target="_blank" rel="noreferrer">{source.name}</a></span>)} · {new Date(report.checkedAt).toLocaleTimeString()}</p>
             </>
           )}

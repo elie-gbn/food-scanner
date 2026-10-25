@@ -165,3 +165,20 @@ export function matchRule(rule: Rule, input: MatchInput): Match[] {
   for (const term of findTerms(text, rule.note.terms)) matches.push({ strength: "note", term, source: "text" });
   return matches;
 }
+
+/** Splits text into plain and matched pieces so the matched terms can be highlighted. */
+export function highlightTerms(text: string, terms: string[]): { text: string; hit: boolean }[] {
+  const unique = [...new Set(terms.map((term) => term.trim()).filter(Boolean))];
+  if (!text || !unique.length) return [{ text, hit: false }];
+  const combined = new RegExp(unique.map((term) => `(?:${termRegex(term).source})`).join("|"), "giu");
+  const pieces: { text: string; hit: boolean }[] = [];
+  let last = 0;
+  for (const found of text.matchAll(combined)) {
+    if (!found[0]) continue;
+    if (found.index > last) pieces.push({ text: text.slice(last, found.index), hit: false });
+    pieces.push({ text: found[0], hit: true });
+    last = found.index + found[0].length;
+  }
+  if (last < text.length) pieces.push({ text: text.slice(last), hit: false });
+  return pieces;
+}
