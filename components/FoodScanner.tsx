@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { FoodReport } from "@/app/api/food-scanner/route";
+import type { FoodReport } from "@/lib/report";
 
 type Point = { x: number; y: number };
 type Detected = { rawValue: string; cornerPoints: Point[] };
