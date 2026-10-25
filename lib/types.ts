@@ -28,6 +28,6 @@ export type FoodReport = {
   nutrients: Nutrient[];
   sources: { name: string; url: string }[];
   /** Set when the food was identified from a photo: what the model saw and how sure it was. */
-  photo?: { portion: string; grams: number; confidence: "high" | "medium" | "low" };
+  photo?: { portion: string; grams: number; confidence: "high" | "medium" | "low" | "picked" };
   checkedAt: string;
 };

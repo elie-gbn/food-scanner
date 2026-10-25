@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { caffeineAmount, ReportView } from "@/components/ReportView";
 import { SavedLibrary, type SavedScan } from "@/components/SavedLibrary";
 import { ALLERGENS, type AllergenId } from "@/lib/allergens";
+import { recognizeFood, type Guess } from "@/lib/recognize";
 import type { FoodReport } from "@/lib/types";
 import { useStored } from "@/lib/use-stored";
 
@@ -14,7 +15,7 @@ type Candidate = { report: FoodReport | null; name: string; detail: string };
 type View =
   | { kind: "empty" }
   | { kind: "results"; title: string; items: Candidate[]; image: string | null; warnings: string[] }
-  | { kind: "report"; report: FoodReport; image: string | null; fromResults: boolean };
+  | { kind: "report"; report: FoodReport; image: string | null; fromResults: boolean; alternatives?: Guess[] };
 
 const FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e"];
 const EXAMPLES = [
@@ -124,25 +125,24 @@ export function FoodScanner() {
     setTab("scan");
   }), [run]);
 
-  const identify = useCallback((image: string) => run("Identifying food…", async () => {
-    const response = await fetch("/api/identify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image }) });
-    const result = await response.json() as { items?: { name: string; portion: string; grams: number; confidence: string; report: FoodReport | null }[]; warnings?: string[]; error?: string };
-    if (!response.ok || !result.items) throw new Error(result.error ?? "Identification failed.");
-    const thumb = await new Promise<string>((resolve) => {
-      const element = new Image();
-      element.onload = () => resolve(toJpeg(element, element.naturalWidth, element.naturalHeight, 240, 0.75));
-      element.src = image;
-    });
-    const items = result.items.map((item) => ({ report: item.report, name: item.name, detail: `${item.portion} · ~${item.grams} g · ${item.confidence} confidence${item.report ? "" : " · no nutrition match"}` }));
-    if (items.length === 1 && items[0].report) {
-      setLastResults(null);
-      showReport(items[0].report, thumb);
-      return;
-    }
-    const next: Extract<View, { kind: "results" }> = { kind: "results", title: `Found ${items.length} item${items.length === 1 ? "" : "s"} in the photo`, image: thumb, warnings: result.warnings ?? [], items };
-    setLastResults(next);
-    setView(next);
-  }), [run, showReport]);
+  const showGuess = useCallback((guess: Guess, alternatives: Guess[], thumb: string | null, picked = false) => run(`Looking up ${guess.name}…`, async () => {
+    const confidence = picked ? "picked" : guess.probability >= 0.7 ? "high" : guess.probability >= 0.35 ? "medium" : "low";
+    const response = await fetch(`/api/identify?food=${encodeURIComponent(guess.name)}&confidence=${confidence}`);
+    const result = await response.json() as FoodReport & { error?: string };
+    if (!response.ok) throw new Error(result.error ?? "Lookup failed.");
+    setLastResults(null);
+    setView({ kind: "report", report: result, image: thumb, fromResults: false, alternatives: alternatives.filter((item) => item.name !== guess.name) });
+    setTab("scan");
+  }), [run]);
+
+  /* Recognition runs entirely in the browser; only the recognized food's name goes to the server. */
+  const identify = useCallback((image: HTMLImageElement | HTMLVideoElement, width: number, height: number) => run("Recognizing food…", async () => {
+    const thumb = toJpeg(image, width, height, 240, 0.75);
+    const blob = await (await fetch(toJpeg(image, width, height, 512))).blob();
+    const { guesses, notFood } = await recognizeFood(blob, (percent) => setBusy(`Downloading the food model (one time, ~43 MB)… ${percent}%`));
+    if (notFood || !guesses.length) throw new Error("No food recognized in that photo. Try getting closer, or search by name.");
+    await showGuess(guesses[0], guesses, thumb);
+  }), [run, showGuess]);
 
   function submit(value = input) {
     const text = value.trim();
@@ -155,14 +155,14 @@ export function FoodScanner() {
   function captureFrame() {
     const element = video.current;
     if (!element?.videoWidth) return;
-    void identify(toJpeg(element, element.videoWidth, element.videoHeight, 1024));
+    void identify(element, element.videoWidth, element.videoHeight);
   }
 
   async function uploadPhoto(file: File | undefined) {
     if (!file) return;
     try {
       const image = await loadImage(file);
-      void identify(toJpeg(image, image.naturalWidth, image.naturalHeight, 1024));
+      void identify(image, image.naturalWidth, image.naturalHeight);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not read that photo.");
     }
@@ -326,7 +326,7 @@ export function FoodScanner() {
               </select>
             )}
           </div>
-          <p className="tapp-small tapp-muted" style={{ margin: ".5rem 0 0" }}>Barcodes are read automatically{engine ? ` (${engine})` : ""}. For fresh food, meals, or drinks without a label, use <b>Identify food</b> or upload a photo.</p>
+          <p className="tapp-small tapp-muted" style={{ margin: ".5rem 0 0" }}>Barcodes are read automatically{engine ? ` (${engine})` : ""}. For fresh food, meals, or drinks without a label, use <b>Identify food</b> or upload a photo. Recognition runs on your device, free.</p>
           <form className="tapp-row" style={{ marginTop: ".75rem" }} onSubmit={(event) => { event.preventDefault(); submit(); }}>
             <input className="tapp-input" style={{ flex: "1 1 12rem" }} value={input} onChange={(event) => setInput(event.target.value)} placeholder="Barcode or food name, e.g. “banana”" aria-label="Barcode or food name" autoComplete="off" enterKeyHint="search" />
             <button className="tapp-btn" type="submit" disabled={!!busy || !input.trim()}>Look up</button>
@@ -374,6 +374,8 @@ export function FoodScanner() {
               saved={isSaved(view.report.id)}
               onSave={() => toggleSave(view.report, view.image)}
               onBack={view.fromResults && lastResults ? { label: "Back to results", action: () => setView(lastResults) } : undefined}
+              alternatives={view.alternatives}
+              onAlternative={(guess) => view.alternatives && void showGuess(guess, [...view.alternatives, { name: view.report.name, query: "", allergens: [], probability: 0 }], view.image, true)}
             />
           )}
         </section>

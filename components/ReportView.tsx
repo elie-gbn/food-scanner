@@ -2,6 +2,7 @@
 
 import { AllergenPanel } from "@/components/AllergenPanel";
 import type { AllergenId } from "@/lib/allergens";
+import type { Guess } from "@/lib/recognize";
 import type { FoodReport } from "@/lib/types";
 
 /* FDA guidance for healthy adults. */
@@ -12,7 +13,7 @@ export const caffeineAmount = (report: FoodReport) => report.caffeine.perServing
 export const kcalPerServing = (report: FoodReport) => report.nutrients.find((item) => item.key === "energy-kcal")?.perServing ?? null;
 const tone = (mg: number | null) => mg === null ? "ok" : mg >= 200 ? "bad" : mg >= 100 ? "warn" : "ok";
 
-export function ReportView({ report, image, mine, saved, onSave, onBack }: {
+export function ReportView({ report, image, mine, saved, onSave, onBack, alternatives, onAlternative }: {
   report: FoodReport;
   /** Local photo to show when the report has no product image. */
   image?: string | null;
@@ -20,6 +21,9 @@ export function ReportView({ report, image, mine, saved, onSave, onBack }: {
   saved: boolean;
   onSave: () => void;
   onBack?: { label: string; action: () => void };
+  /** Other likely foods from photo recognition, offered as one-tap corrections. */
+  alternatives?: Guess[];
+  onAlternative?: (guess: Guess) => void;
 }) {
   const caffeine = report.caffeine;
   const main = caffeineAmount(report);
@@ -36,13 +40,21 @@ export function ReportView({ report, image, mine, saved, onSave, onBack }: {
           <p className="tapp-muted" style={{ margin: ".15rem 0 .4rem" }}>{[report.brand, report.quantity].filter(Boolean).join(" · ") || (report.origin === "photo" ? "Identified from photo" : "Generic food")}</p>
           <div className="tapp-row">
             {report.barcode && <span className="tapp-badge">{report.barcode}</span>}
-            {report.photo && <span className={`tapp-badge ${report.photo.confidence === "high" ? "ok" : report.photo.confidence === "medium" ? "warn" : "bad"}`}>{report.photo.confidence.toUpperCase()} CONFIDENCE</span>}
+            {report.photo && <span className={`tapp-badge ${report.photo.confidence === "picked" ? "info" : report.photo.confidence === "high" ? "ok" : report.photo.confidence === "medium" ? "warn" : "bad"}`}>{report.photo.confidence === "picked" ? "PICKED BY YOU" : `${report.photo.confidence.toUpperCase()} CONFIDENCE`}</span>}
             {report.nutriscore && <span className={`tapp-badge ${"ab".includes(report.nutriscore) ? "ok" : report.nutriscore === "c" ? "warn" : "bad"}`}>NUTRI-SCORE {report.nutriscore.toUpperCase()}</span>}
             {report.nova && <span className={`tapp-badge ${report.nova <= 2 ? "ok" : report.nova === 3 ? "warn" : "bad"}`}>NOVA {report.nova}</span>}
           </div>
         </div>
         <button className={`tapp-btn tapp-btn-sm${saved ? "" : " tapp-btn-primary"}`} onClick={onSave} aria-pressed={saved} style={{ flex: "none" }}>{saved ? "★ Saved" : "☆ Save"}</button>
       </div>
+
+      {alternatives && alternatives.length > 0 && onAlternative && (
+        <div className="tapp-row tapp-small" style={{ marginTop: ".6rem" }}>
+          <span className="tapp-muted">Not right? Did you mean</span>
+          {alternatives.map((guess) => <button key={guess.name} className="tapp-btn tapp-btn-sm" onClick={() => onAlternative(guess)}>{guess.name}{guess.probability >= 0.01 ? ` · ${Math.round(guess.probability * 100)}%` : ""}</button>)}
+          <span className="tapp-muted">or search by name.</span>
+        </div>
+      )}
 
       <div className="food-caffeine">
         <div className="tapp-spread" style={{ alignItems: "flex-end" }}>
@@ -80,14 +92,14 @@ export function ReportView({ report, image, mine, saved, onSave, onBack }: {
       <div className="tapp-panel-head" style={{ marginTop: "1rem" }}><h2>Nutrition</h2>{report.servingSize && <span className="tapp-small tapp-muted">Serving: {report.servingSize}</span>}</div>
       {report.nutrients.length ? (
         <div className="tapp-table-wrap"><table className="tapp-table">
-          <thead><tr><th>NUTRIENT</th><th>PER {report.basis.toUpperCase()}</th><th>{report.photo ? "IN PHOTO" : "PER SERVING"}</th></tr></thead>
+          <thead><tr><th>NUTRIENT</th><th>PER {report.basis.toUpperCase()}</th><th>PER SERVING</th></tr></thead>
           <tbody>{report.nutrients.map((item) => <tr key={item.key}><td>{item.label}</td><td>{fmt(item.per100, item.unit)}</td><td>{fmt(item.perServing, item.unit)}</td></tr>)}</tbody>
         </table></div>
       ) : <p className="tapp-muted tapp-small">No nutrition facts have been published for this item yet.</p>}
-      {report.photo && <p className="tapp-small tapp-muted" style={{ marginBottom: 0 }}>Portion estimated from the photo: {report.photo.portion} (~{report.photo.grams} g). Nutrition values come from the closest USDA match, scaled to that portion.</p>}
+      {report.photo && <p className="tapp-small tapp-muted" style={{ marginBottom: 0 }}>{report.photo.confidence === "picked" ? `You picked ${report.name}.` : `Recognized as ${report.name} (${report.photo.confidence} confidence).`} Serving: {report.photo.portion}. Values are for a typical serving from the closest USDA match.</p>}
 
       {report.ingredients && <details style={{ marginTop: "1rem" }}><summary className="tapp-muted" style={{ cursor: "pointer" }}>Ingredients</summary><p className="tapp-small" style={{ marginBottom: 0 }}>{report.ingredients}</p></details>}
-      <p className="tapp-small tapp-muted" style={{ marginTop: "1rem", marginBottom: 0 }}>Source: {report.sources.map((source, index) => <span key={source.name}>{index > 0 && " + "}<a href={source.url} target="_blank" rel="noreferrer">{source.name}</a></span>)}{report.origin === "photo" && " · identified by Claude"} · {new Date(report.checkedAt).toLocaleString()}</p>
+      <p className="tapp-small tapp-muted" style={{ marginTop: "1rem", marginBottom: 0 }}>Source: {report.sources.map((source, index) => <span key={source.name}>{index > 0 && " + "}<a href={source.url} target="_blank" rel="noreferrer">{source.name}</a></span>)}{report.origin === "photo" && " · recognized on your device"} · {new Date(report.checkedAt).toLocaleString()}</p>
     </>
   );
 }
