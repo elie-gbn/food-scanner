@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { reportId, type FoodReport } from "@/lib/report";
 import { highlightTerms } from "@/lib/diet";
+import { enhanceFrame } from "@/lib/frame";
 import { classifyLookup, watchFor, type LookupFailure } from "@/lib/lookup";
 import { isEmptyProfile } from "@/lib/profile";
 import { ingredientView, LANGUAGES, translateUrl } from "@/lib/translate";
@@ -17,7 +18,7 @@ import { useProfile } from "./useProfile";
 
 type Point = { x: number; y: number };
 type Detected = { rawValue: string; cornerPoints: Point[] };
-type Detector = { detect: (source: HTMLVideoElement) => Promise<Detected[]> };
+type Detector = { detect: (source: HTMLVideoElement | ImageData) => Promise<Detected[]> };
 
 const FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e"];
 /* FDA guidance for healthy adults. */
@@ -74,6 +75,8 @@ export function FoodScanner() {
   const candidate = useRef<{ code: string; hits: number }>({ code: "", hits: 0 });
   const lastLookup = useRef("");
   const failures = useRef(0);
+  const softCanvas = useRef<HTMLCanvasElement | null>(null);
+  const [slowScan, setSlowScan] = useState(false);
 
   const [cameraState, setCameraState] = useState<"idle" | "starting" | "live" | "error">("idle");
   const [cameraError, setCameraError] = useState("");
@@ -253,13 +256,36 @@ export function FoodScanner() {
     if (cameraState !== "live") return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
+    let lastSeen = Date.now();
+    let ticks = 0;
+
+    /* A plain read failed: sharpen the frame and try again. Webcams that cannot focus up close give soft bars. */
+    async function readSoft(element: HTMLVideoElement): Promise<Detected | undefined> {
+      const scale = Math.min(1, 1280 / element.videoWidth);
+      const canvas = softCanvas.current ?? (softCanvas.current = document.createElement("canvas"));
+      canvas.width = Math.round(element.videoWidth * scale);
+      canvas.height = Math.round(element.videoHeight * scale);
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context || !detector.current) return undefined;
+      context.drawImage(element, 0, 0, canvas.width, canvas.height);
+      const frame = context.getImageData(0, 0, canvas.width, canvas.height);
+      enhanceFrame(frame.data, frame.width, frame.height);
+      const [found] = await detector.current.detect(frame);
+      return found && { rawValue: found.rawValue, cornerPoints: found.cornerPoints.map((point) => ({ x: point.x / scale, y: point.y / scale })) };
+    }
+
     async function tick() {
       const element = video.current;
       if (cancelled || !element || !detector.current) return;
       if (element.readyState >= 2 && element.videoWidth) {
         try {
-          const [found] = await detector.current.detect(element);
+          let found: Detected | undefined = (await detector.current.detect(element))[0];
+          // The sharpened read costs more, so it runs on every second tick; a skipped tick says nothing about the barcode.
+          const softTick = !found && ticks++ % 2 === 0;
+          if (softTick) found = await readSoft(element);
           if (found) {
+            lastSeen = Date.now();
+            setSlowScan(false);
             setBox({ points: found.cornerPoints, width: element.videoWidth, height: element.videoHeight });
             const code = found.rawValue.replace(/\D/g, "");
             candidate.current = candidate.current.code === code ? { code, hits: candidate.current.hits + 1 } : { code, hits: 1 };
@@ -267,9 +293,10 @@ export function FoodScanner() {
               navigator.vibrate?.(60);
               void lookup(code);
             }
-          } else {
+          } else if (softTick) {
             setBox(null);
             candidate.current = { code: "", hits: 0 };
+            if (Date.now() - lastSeen > 8000) setSlowScan(true);
           }
           failures.current = 0;
         } catch {
@@ -337,7 +364,7 @@ export function FoodScanner() {
               </svg>
             )}
             {cameraState === "live" && !box && <div className="food-reticle" aria-hidden="true" />}
-            {cameraState === "live" && !box && <div className="food-status">Hold the barcode flat inside the corners</div>}
+            {cameraState === "live" && !box && <div className="food-status">{slowScan ? "Not reading yet: move the barcode back to about 30 cm so the camera can focus, and add light" : "Hold the barcode flat inside the corners"}</div>}
             {cameraState !== "live" && (
               <div className="food-placeholder">
                 <button className="tapp-btn tapp-btn-primary" onClick={() => void startCamera(deviceId)} disabled={cameraState === "starting"}>{cameraState === "starting" ? "Starting camera…" : "Start camera"}</button>
