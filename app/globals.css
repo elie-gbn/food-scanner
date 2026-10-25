@@ -1,35 +1,36 @@
-/* Light by default, dark when the system asks for it. One green accent, used for the scan action and good states. */
+/* Light by default, dark when the system asks for it. Purple is the action and the "nothing found" colour, pink means
+   "may contain" and red means "contains". Every state also has its own icon and words, so colour is never the only signal. */
 
 :root {
-  --t-bg: #f5f7f5;
+  --t-bg: #faf5fc;
   --t-surface: #ffffff;
-  --t-ink: #14201a;
-  --t-dim: #566259;
-  --t-line: #dde4df;
-  --t-accent: #137036;
+  --t-ink: #1f1130;
+  --t-dim: #5b4a6e;
+  --t-line: #e3d3ee;
+  --t-accent: #6d28d9;
   --t-accent-ink: #ffffff;
-  --t-accent-soft: #e6f4ea;
-  --t-warn: #8a5300;
-  --t-warn-soft: #fff3dc;
-  --t-bad: #b42318;
-  --t-bad-soft: #fdecea;
-  --t-shadow: 0 1px 2px rgba(20, 32, 26, .06), 0 8px 24px rgba(20, 32, 26, .05);
+  --t-accent-soft: #f1e8fd;
+  --t-warn: #be185d;
+  --t-warn-soft: #fde7f1;
+  --t-bad: #b91c1c;
+  --t-bad-soft: #fdeaea;
+  --t-shadow: 0 1px 2px rgba(60, 20, 90, .06), 0 8px 24px rgba(60, 20, 90, .06);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --t-bg: #0e1411;
-    --t-surface: #161e1a;
-    --t-ink: #eef3ef;
-    --t-dim: #9aa9a0;
-    --t-line: #26332c;
-    --t-accent: #4ade80;
-    --t-accent-ink: #05210f;
-    --t-accent-soft: #14301f;
-    --t-warn: #fbbf24;
-    --t-warn-soft: #33270a;
-    --t-bad: #ff8a80;
-    --t-bad-soft: #3a1714;
+    --t-bg: #150d1f;
+    --t-surface: #1f1430;
+    --t-ink: #f4ecfb;
+    --t-dim: #b8a6cc;
+    --t-line: #3a2a52;
+    --t-accent: #c4a1ff;
+    --t-accent-ink: #1a0b30;
+    --t-accent-soft: #2d1b4d;
+    --t-warn: #ff8ac8;
+    --t-warn-soft: #3d1430;
+    --t-bad: #ff7b7b;
+    --t-bad-soft: #421418;
     --t-shadow: none;
   }
 }
@@ -87,8 +88,8 @@ body {
   width: 2.25rem;
   height: 2.25rem;
   border-radius: .6rem;
-  background: var(--t-accent);
-  color: var(--t-accent-ink);
+  background: linear-gradient(135deg, #6d28d9 0%, #d6338a 55%, #dc2626 100%);
+  color: #fff;
 }
 
 .tapp-title {
@@ -363,11 +364,11 @@ body {
 /* Camera on the left, result on the right; stacked on narrow screens. */
 .food-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
 @media (max-width: 800px) { .food-layout { grid-template-columns: minmax(0, 1fr); } }
-.food-viewport { position: relative; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 1rem; background: #0b0f0d; }
+.food-viewport { position: relative; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 1rem; background: #0f0818; }
 .food-viewport video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .food-viewport:not(.is-live) video { visibility: hidden; }
 .food-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.food-overlay polygon { fill: rgba(74, 222, 128, .2); stroke: #4ade80; stroke-width: 4; vector-effect: non-scaling-stroke; }
+.food-overlay polygon { fill: rgba(244, 114, 182, .22); stroke: #f472b6; stroke-width: 4; vector-effect: non-scaling-stroke; }
 /* Viewfinder: four corner brackets mark where to hold the barcode. */
 .food-reticle { position: absolute; left: 12%; right: 12%; top: 30%; bottom: 30%; pointer-events: none; --b: 3px solid #fff; --c: 1.5rem; background:
   linear-gradient(#fff, #fff) left top / var(--c) 3px no-repeat, linear-gradient(#fff, #fff) left top / 3px var(--c) no-repeat,
@@ -375,7 +376,7 @@ body {
   linear-gradient(#fff, #fff) left bottom / var(--c) 3px no-repeat, linear-gradient(#fff, #fff) left bottom / 3px var(--c) no-repeat,
   linear-gradient(#fff, #fff) right bottom / var(--c) 3px no-repeat, linear-gradient(#fff, #fff) right bottom / 3px var(--c) no-repeat; }
 .food-placeholder { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: .75rem; padding: 1rem; text-align: center; color: #fff; }
-.food-placeholder .tapp-small { color: #ffb4ab; }
+.food-placeholder .tapp-small { color: #ffc2c2; }
 .food-status { position: absolute; left: .75rem; bottom: .75rem; padding: .3rem .75rem; border-radius: 999px; background: rgba(0, 0, 0, .75); color: #fff; font-size: .875rem; }
 .food-results { min-height: 20rem; }
 .food-product { display: flex; gap: 1rem; align-items: flex-start; }
@@ -392,9 +393,17 @@ body {
 button.food-chip { background: var(--t-surface); color: var(--t-ink); font: inherit; text-transform: none; }
 .food-chip .tapp-muted { text-transform: none; }
 .food-verdict.is-warn { background: var(--t-warn-soft); color: var(--t-warn); }
-.food-verdict.is-unknown { background: var(--t-bg); color: var(--t-ink); border: 1px solid var(--t-line); }
+.food-verdict.is-unknown { background: var(--t-surface); color: var(--t-ink); border: 2px dashed var(--t-dim); }
+.food-verdict.is-bad { border-left: .5rem solid var(--t-bad); }
+.food-verdict.is-warn { border-left: .5rem solid var(--t-warn); }
+.food-verdict:not(.is-bad):not(.is-warn):not(.is-unknown) { border-left: .5rem solid var(--t-accent); }
 .food-verdict-head { margin: 0; font-size: 1.35rem; font-weight: 800; line-height: 1.25; text-transform: uppercase; letter-spacing: .01em; }
 .food-verdict-list { margin: .6rem 0 0; padding: 0; list-style: none; display: grid; gap: .35rem; }
 mark.food-hit { background: var(--t-bad-soft); color: var(--t-bad); font-weight: 700; padding: 0 .15em; border-radius: .2em; }
 .food-results summary { min-height: 2.75rem; display: flex; align-items: center; }
 .food-results a { display: inline-block; padding: .65rem .2rem; }
+
+/* A strip of barcode bars in the three palette colours, under the page title. Decoration only. */
+.food-bars { height: .75rem; margin: .9rem 0 0; border-radius: .2rem; background: repeating-linear-gradient(90deg,
+  var(--t-accent) 0 3px, transparent 3px 6px, var(--t-accent) 6px 7px, transparent 7px 11px, var(--t-warn) 11px 14px, transparent 14px 16px,
+  var(--t-warn) 16px 17px, transparent 17px 21px, var(--t-bad) 21px 24px, transparent 24px 25px, var(--t-bad) 25px 26px, transparent 26px 31px); }

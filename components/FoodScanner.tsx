@@ -189,13 +189,16 @@ export function FoodScanner() {
     <div className="tapp">
       <header className="tapp-header">
         <span className="tapp-brand">
-          <span className="tapp-brand-mark" aria-hidden="true">▦</span>
+          <span className="tapp-brand-mark" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="#fff"><rect x="2" y="3" width="2" height="14" /><rect x="6" y="3" width="1" height="14" /><rect x="9" y="3" width="3" height="14" /><rect x="14" y="3" width="1" height="14" /><rect x="17" y="3" width="1" height="14" /></svg>
+          </span>
           <span>Labelens</span>
         </span>
       </header>
       <div className="tapp-title">
         <h1>Scan a food barcode</h1>
         <p className="tapp-muted">Tell us what you avoid, then point your camera at a barcode to see what is in it.</p>
+        <div className="food-bars" aria-hidden="true" />
       </div>
 
       <ProfileSetup profile={profile} onChange={setProfile} />
