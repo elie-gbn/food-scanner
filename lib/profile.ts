@@ -1,4 +1,5 @@
 import { ALLERGENS, DIETS } from "./diet";
+import { LANGUAGES } from "./translate";
 import type { Profile } from "./verdict";
 
 /* The profile lives only in this browser's localStorage. It is never sent to the server. */
@@ -21,7 +22,7 @@ export function cleanProfile(value: unknown): Profile {
     allergens: unique(strings(raw.allergens)).filter((name) => ALLERGENS.includes(name)),
     diets: unique(strings(raw.diets)).filter((id) => dietIds.includes(id)),
     custom: unique(strings(raw.custom).map((word) => word.trim()).filter((word) => word && word.length <= MAX_WORD)).slice(0, MAX_CUSTOM),
-    language: typeof raw.language === "string" && raw.language ? raw.language : "en",
+    language: LANGUAGES.some((entry) => entry.code === raw.language) ? (raw.language as string) : "en",
   };
 }
 

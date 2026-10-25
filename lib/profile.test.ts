@@ -34,6 +34,10 @@ describe("cleanProfile", () => {
   });
   it("defaults the language to English", () => {
     expect(cleanProfile({ language: 5 }).language).toBe("en");
+    expect(cleanProfile({ language: "klingon" }).language).toBe("en");
+  });
+  it("keeps a supported language", () => {
+    expect(cleanProfile({ language: "es" }).language).toBe("es");
   });
 });
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ALLERGENS } from "@/lib/diet";
 import { isEmptyProfile } from "@/lib/profile";
+import { LANGUAGES } from "@/lib/translate";
 import type { Profile } from "@/lib/verdict";
 
 const DIET_CHOICES = [
@@ -71,6 +72,12 @@ export function ProfileSetup({ profile, onChange }: { profile: Profile; onChange
             ))}
           </div>
         )}
+      </div>
+      <div className="food-group">
+        <label className="tapp-label" htmlFor="read-language">Translate ingredient lists to</label>
+        <select id="read-language" className="tapp-input" style={{ maxWidth: "16rem" }} value={profile.language} onChange={(event) => onChange({ ...profile, language: event.target.value })}>
+          {LANGUAGES.map((entry) => <option key={entry.code} value={entry.code}>{entry.name}</option>)}
+        </select>
       </div>
       <p className="tapp-small tapp-muted" style={{ margin: ".75rem 0 0" }}>Saved on this device only. It is never sent anywhere.</p>
     </details>

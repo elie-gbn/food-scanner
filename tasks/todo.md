@@ -6,7 +6,7 @@
 - [x] 4. Profile setup UI + migration of the old allergen key
 - [x] 5. Verdict banner and evidence in the result
 - [ ] Checkpoint A: scan 5 real products, compare against the labels
-- [ ] 6. Ingredient translation (taxonomy chips + original text)
+- [x] 6. Ingredient translation (taxonomy chips + original text)
 - [ ] 7. Not-found, no-data and failure states
 - [ ] 8. Phone, accessibility, README and disclaimer
 - [ ] Checkpoint B: try on a phone over HTTPS

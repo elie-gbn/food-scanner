@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FoodReport } from "@/lib/report";
 import { highlightTerms } from "@/lib/diet";
 import { isEmptyProfile } from "@/lib/profile";
+import { ingredientView, LANGUAGES, translateUrl } from "@/lib/translate";
 import { assessData, evaluate, headline } from "@/lib/verdict";
 import { ProfileSetup } from "./ProfileSetup";
 import { VerdictBanner } from "./VerdictBanner";
@@ -170,6 +171,9 @@ export function FoodScanner() {
   const findings = useMemo(() => report ? evaluate(report, profile) : [], [report, profile]);
   const quality = useMemo(() => report ? assessData(report) : { state: "ok" as const, reasons: [] }, [report]);
   const highlights = useMemo(() => findings.flatMap((finding) => finding.status === "contains" || finding.status === "may-contain" ? finding.terms : []), [findings]);
+  const view = report ? ingredientView(report) : null;
+  const translation = view ? translateUrl(view.original ?? view.english, profile.language) : null;
+  const marked = (text: string) => highlightTerms(text, highlights).map((piece, index) => piece.hit ? <mark key={index} className="food-hit">{piece.text}</mark> : piece.text);
   const hasHit = findings.some((finding) => finding.status === "contains" || finding.status === "may-contain");
 
   return (
@@ -292,10 +296,23 @@ export function FoodScanner() {
               ) : <p className="tapp-muted tapp-small">No nutrition facts have been published for this product yet.</p>}
 
               {report.allergens.length > 0 && <p style={{ marginTop: "1rem" }}><span className="tapp-label">Allergens</span>{report.allergens.map((allergen) => <span key={allergen} className="tapp-badge warn" style={{ marginRight: ".3rem", textTransform: "capitalize" }}>{allergen}</span>)}</p>}
-              {report.ingredients ? (
+              {view?.original ? (
                 <details key={`${report.barcode}-${hasHit}`} open={hasHit} style={{ marginTop: "1rem" }}>
                   <summary style={{ cursor: "pointer", fontWeight: 600 }}>Ingredients</summary>
-                  <p className="tapp-small" style={{ marginBottom: 0 }}>{highlightTerms(report.ingredients, highlights).map((piece, index) => piece.hit ? <mark key={index} className="food-hit">{piece.text}</mark> : piece.text)}</p>
+                  {view.english && (
+                    <>
+                      <span className="tapp-label" style={{ display: "block", marginTop: ".6rem" }}>English, as written in the database (can leave things out; the original below is what counts)</span>
+                      <p className="tapp-small" style={{ margin: 0 }}>{marked(view.english)}</p>
+                    </>
+                  )}
+                  <span className="tapp-label" style={{ display: "block", marginTop: ".6rem" }}>Original{view.originalLang ? ` (${view.originalLang})` : ""}</span>
+                  <p className="tapp-small" style={{ margin: 0 }}>{marked(view.original)}</p>
+                  {translation && (
+                    <p className="tapp-small" style={{ margin: ".6rem 0 0" }}>
+                      <a href={translation} target="_blank" rel="noreferrer">Translate to {LANGUAGES.find((entry) => entry.code === profile.language)?.name} with Google Translate</a>{" "}
+                      <span className="tapp-muted">(machine translation; the ingredient text is sent to Google)</span>
+                    </p>
+                  )}
                 </details>
               ) : <p className="tapp-small tapp-muted" style={{ marginTop: "1rem" }}>No ingredient list is published for this product.</p>}
               <p className="tapp-small tapp-muted" style={{ marginTop: "1rem", marginBottom: 0 }}>Source: {report.sources.map((source, index) => <span key={source.name}>{index > 0 && " + "}<a href={source.url} target="_blank" rel="noreferrer">{source.name}</a></span>)} · {new Date(report.checkedAt).toLocaleTimeString()}</p>
