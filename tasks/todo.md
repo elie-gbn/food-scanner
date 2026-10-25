@@ -1,0 +1,12 @@
+# Todo (plan: tasks/plan.md)
+
+- [ ] 1. Add vitest and the diet rules table (`lib/diet.ts`)
+- [ ] 2. API returns ingredient, trace and label tags
+- [ ] 3. Verdict engine (`lib/verdict.ts`)
+- [ ] 4. Profile setup UI + migration of the old allergen key
+- [ ] 5. Verdict banner and evidence in the result
+- [ ] Checkpoint A: scan 5 real products, compare against the labels
+- [ ] 6. Ingredient translation (taxonomy chips + original text)
+- [ ] 7. Not-found, no-data and failure states
+- [ ] 8. Phone, accessibility, README and disclaimer
+- [ ] Checkpoint B: try on a phone over HTTPS
