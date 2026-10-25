@@ -8,5 +8,5 @@
 - [ ] Checkpoint A: scan 5 real products, compare against the labels
 - [x] 6. Ingredient translation (taxonomy chips + original text)
 - [x] 7. Not-found, no-data and failure states
-- [ ] 8. Phone, accessibility, README and disclaimer
+- [x] 8. Phone, accessibility, README and disclaimer
 - [ ] Checkpoint B: try on a phone over HTTPS

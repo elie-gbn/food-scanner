@@ -195,7 +195,7 @@ export function FoodScanner() {
       </header>
       <div className="tapp-title">
         <h1>Scan a food barcode</h1>
-        <p className="tapp-muted">Point your camera at a barcode to see caffeine, nutrition and allergens.</p>
+        <p className="tapp-muted">Tell us what you avoid, then point your camera at a barcode to see what is in it.</p>
       </div>
 
       <ProfileSetup profile={profile} onChange={setProfile} />
@@ -341,7 +341,7 @@ export function FoodScanner() {
           </table></div>
         </section>
       )}
-      <footer className="tapp-footer"><span>Product data is crowd-sourced and can be incomplete. Check the label when it matters.</span></footer>
+      <footer className="tapp-footer"><span>Not medical advice. Product data is crowd-sourced and can be wrong or incomplete. Always check the printed label.</span></footer>
     </div>
   );
 }
