@@ -50,7 +50,18 @@ export type FoodReport = {
   nutrients: Nutrient[];
   sources: { name: string; url: string }[];
   checkedAt: string;
+  /** Stable id for saving: `off:<barcode>`, `usda:<fdcId>` or `photo:<fdcId>`. Older saved reports may lack it. */
+  id?: string;
+  /** How the food was found. Missing means a barcode scan. */
+  origin?: "barcode" | "search" | "photo";
+  /** Set for USDA generic foods (a typical recipe, not a labelled product): there is no ingredient list. */
+  generic?: { description: string; typicalAllergens: string[] };
+  /** Set when the food was recognized from a photo. "picked" means the person chose it from the alternatives. */
+  photo?: { confidence: "high" | "medium" | "low" | "picked" };
 };
+
+/** A USDA FNDDS generic food as bundled in data/generic-foods.json (nutrient values per 100 g, keyed by USDA nutrient id). */
+export type GenericFood = { id: number; name: string; category: string; n: Record<string, number>; portions: [string, number][] };
 
 /* [key, label, unit shown, multiplier from the source's grams] */
 const OFF_NUTRIENTS: [string, string, string, number][] = [
@@ -175,3 +186,57 @@ export function buildReport(code: string, off: OffProduct | null, usda: UsdaFood
     checkedAt: new Date().toISOString(),
   };
 }
+
+const DRINK = /beverage|coffee|tea|juice|soda|soft drink|milk|drink|water|beer|wine|cocktail|smoothie|shake|kombucha|lemonade/i;
+
+/** Report for a USDA generic food. `name` replaces the USDA description (e.g. the photo label), and
+ *  `typicalAllergens` lists what the usual recipe contains, as diet.ts allergen names. */
+export function buildGenericReport(food: GenericFood, extra: { name?: string; typicalAllergens?: string[]; origin?: "search" | "photo" } = {}): FoodReport {
+  const serving = food.portions[0] ?? null;
+  const per100 = (id: number) => food.n[id] ?? null;
+  const nutrients: Nutrient[] = OFF_NUTRIENTS.map(([key, label, unit]) => {
+    const id = Number(Object.entries(USDA_IDS).find(([, name]) => name === key)?.[0]);
+    const sodium = per100(1093);
+    const value = key === "salt" ? (sodium === null ? null : sodium * 2.5 / 1000) : Number.isNaN(id) ? null : per100(id);
+    return { key, label, unit, per100: round(value), perServing: value === null || !serving ? null : round(value * serving[1] / 100) };
+  }).filter((item) => item.per100 !== null);
+  const caffeine100 = per100(1057);
+  const name = extra.name ?? food.name;
+  const signals = CAFFEINE_WORDS.filter(([pattern]) => pattern.test(`${food.name} ${food.category}`)).map(([, label]) => label);
+
+  return {
+    id: `${extra.origin === "photo" ? "photo" : "usda"}:${food.id}`,
+    origin: extra.origin ?? "search",
+    barcode: "",
+    name,
+    brand: null,
+    image: null,
+    quantity: null,
+    servingSize: serving ? `${serving[0]} (${Math.round(serving[1])} g)` : null,
+    basis: DRINK.test(`${food.name} ${food.category}`) ? "100 ml" : "100 g",
+    nutriscore: null,
+    nova: null,
+    ingredients: null,
+    ingredientsEn: null,
+    ingredientTags: [],
+    allergens: [],
+    traces: [],
+    labels: [],
+    analysis: [],
+    ingredientsComplete: null,
+    lang: null,
+    caffeine: {
+      per100: round(caffeine100),
+      perServing: caffeine100 === null || !serving ? null : round(caffeine100 * serving[1] / 100),
+      perContainer: null,
+      signals,
+    },
+    nutrients,
+    sources: [{ name: "USDA FoodData Central (FNDDS)", url: `https://fdc.nal.usda.gov/food-details/${food.id}/nutrients` }],
+    checkedAt: new Date().toISOString(),
+    generic: { description: food.name, typicalAllergens: extra.typicalAllergens ?? [] },
+  };
+}
+
+/** Saving key for a report; barcode results built before ids existed fall back to the barcode. */
+export const reportId = (report: FoodReport) => report.id ?? `off:${report.barcode}`;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildReport, type OffProduct, type UsdaFood } from "./report";
+import { buildGenericReport, buildReport, type OffProduct, type UsdaFood } from "./report";
 import fixtures from "./fixtures/products.json";
 
 const products = fixtures as unknown as Record<string, OffProduct & { code: string }>;
@@ -43,5 +43,22 @@ describe("buildReport", () => {
 
   it("returns null when neither source knows the product", () => {
     expect(buildReport("1", null, null)).toBeNull();
+  });
+});
+
+describe("buildGenericReport", () => {
+  const coffee = { id: 2710375, name: "Coffee, brewed", category: "Coffee", n: { 1008: 1, 1057: 40, 1093: 2 }, portions: [["typical serving", 360]] as [string, number][] };
+
+  it("scales caffeine and nutrients to the typical serving", () => {
+    const r = buildGenericReport(coffee);
+    expect(r.caffeine).toMatchObject({ per100: 40, perServing: 144 });
+    expect(r.servingSize).toBe("typical serving (360 g)");
+    expect(r.basis).toBe("100 ml");
+    expect(r.nutrients.find((n) => n.key === "salt")?.per100).toBe(0.01);
+  });
+
+  it("uses the display name, keeps the USDA name for matching, and has no ingredient list", () => {
+    const r = buildGenericReport(coffee, { name: "Black coffee", typicalAllergens: [], origin: "photo" });
+    expect(r).toMatchObject({ name: "Black coffee", origin: "photo", id: "photo:2710375", ingredients: null, generic: { description: "Coffee, brewed" } });
   });
 });

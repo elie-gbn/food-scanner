@@ -407,3 +407,23 @@ mark.food-hit { background: var(--t-bad-soft); color: var(--t-bad); font-weight:
 .food-bars { height: .75rem; margin: .9rem 0 0; border-radius: .2rem; background: repeating-linear-gradient(90deg,
   var(--t-accent) 0 3px, transparent 3px 6px, var(--t-accent) 6px 7px, transparent 7px 11px, var(--t-warn) 11px 14px, transparent 14px 16px,
   var(--t-warn) 16px 17px, transparent 17px 21px, var(--t-bad) 21px 24px, transparent 24px 25px, var(--t-bad) 25px 26px, transparent 26px 31px); }
+
+/* Scan / Saved tabs, search and photo result lists, and the saved library. */
+.food-layout[hidden] { display: none; }
+.food-tabs { display: flex; gap: .25rem; margin-left: auto; padding: .25rem; border-radius: 999px; background: var(--t-accent-soft); }
+.food-tabs button { min-height: 2.5rem; padding: .35rem 1rem; border: 0; border-radius: 999px; background: none; color: var(--t-dim); font: inherit; font-weight: 600; cursor: pointer; }
+.food-tabs button.is-active { background: var(--t-surface); color: var(--t-accent); box-shadow: var(--t-shadow); }
+label.tapp-btn { cursor: pointer; }
+.food-candidates, .food-saved { display: grid; gap: .6rem; margin: 0; padding: 0; list-style: none; }
+.food-candidates button, .food-saved-main { display: flex; width: 100%; min-height: 3.5rem; gap: .75rem; align-items: center; padding: .6rem .75rem; border: 1px solid var(--t-line); border-radius: 1rem; background: var(--t-surface); color: var(--t-ink); font: inherit; text-align: left; cursor: pointer; }
+.food-candidates button:hover, .food-saved-main:hover { border-color: var(--t-accent); }
+.food-candidates button > span:nth-of-type(1), .food-candidates button > span:has(strong), .food-saved-main > span:last-child { display: grid; flex: 1; }
+.food-candidates img, .food-saved img, .food-saved-ph { width: 3rem; height: 3rem; flex: none; border-radius: .75rem; object-fit: cover; background: #fff; }
+.food-saved-ph { display: grid; place-items: center; background: var(--t-accent-soft); color: var(--t-accent); font-size: 1.25rem; }
+.food-candidate-mg { flex: none; color: var(--t-accent); font-weight: 600; }
+.food-saved li { padding: .75rem; border: 1px solid var(--t-line); border-radius: 1rem; }
+.food-saved .food-saved-main { min-height: 0; padding: 0; border: 0; }
+.food-saved .food-saved-main:hover .food-saved-name { color: var(--t-accent); text-decoration: underline; }
+.food-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.food-kpis .tapp-panel { display: grid; gap: .15rem; }
+.food-kpis strong { font-size: 1.75rem; line-height: 1.2; }

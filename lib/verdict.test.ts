@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildReport, type FoodReport, type OffProduct } from "./report";
+import { buildGenericReport, buildReport, type FoodReport, type OffProduct } from "./report";
 import { assessData, evaluate, headline, type Profile } from "./verdict";
 import fixtures from "./fixtures/products.json";
 
@@ -137,5 +137,41 @@ describe("headline", () => {
   });
   it("has no headline for an empty profile", () => {
     expect(head("coca-cola", {})).toBeNull();
+  });
+});
+
+describe("evaluate: generic foods (search and photo results)", () => {
+  const generic = (name: string, typicalAllergens: string[]): FoodReport =>
+    buildGenericReport({ id: 1, name, category: "", n: { 1008: 250 }, portions: [["typical serving", 100]] }, { typicalAllergens, origin: "photo" });
+
+  it("a usual-recipe allergen is may-contain, never contains", () => {
+    const f = find(generic("Pizza, cheese", ["gluten", "milk"]), { allergens: ["milk"] }, "milk");
+    expect(f.status).toBe("may-contain");
+    expect(f.evidence).toContain("milk (usually in this food)");
+  });
+
+  it("a forbidden word in the food name is may-contain from the usual recipe", () => {
+    const f = find(generic("Bacon, NS as to type of meat, cooked", []), { diets: ["pork-free"] }, "pork-free");
+    expect(f.status).toBe("may-contain");
+    expect(f.evidence).toContain("bacon (usual recipe)");
+  });
+
+  it("animal allergens in the usual recipe flag vegan, and fish flags vegetarian", () => {
+    expect(find(generic("Omelet", ["eggs"]), { diets: ["vegan"] }, "vegan").status).toBe("may-contain");
+    expect(find(generic("Sushi, NFS", ["fish"]), { diets: ["vegetarian"] }, "vegetarian").status).toBe("may-contain");
+    expect(find(generic("Omelet", ["eggs"]), { diets: ["vegetarian"] }, "vegetarian").status).toBe("unknown");
+  });
+
+  it("with nothing found it is unknown, because there is no ingredient list", () => {
+    const r = generic("Banana, raw", []);
+    expect(find(r, { allergens: ["milk"] }, "milk").status).toBe("unknown");
+    expect(assessData(r).reasons[0]).toMatch(/typical recipe/);
+  });
+});
+
+describe("evaluate: pepperoni", () => {
+  it("is may-contain for pork-free, since pepperoni is usually but not always pork", () => {
+    const pizza = buildGenericReport({ id: 2, name: "Pizza with pepperoni, stuffed crust", category: "", n: {}, portions: [] }, { origin: "photo" });
+    expect(find(pizza, { diets: ["pork-free"] }, "pork-free").status).toBe("may-contain");
   });
 });

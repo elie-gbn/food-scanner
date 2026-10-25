@@ -1,13 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { FoodReport } from "@/lib/report";
+import { reportId, type FoodReport } from "@/lib/report";
 import { highlightTerms } from "@/lib/diet";
 import { classifyLookup, watchFor, type LookupFailure } from "@/lib/lookup";
 import { isEmptyProfile } from "@/lib/profile";
 import { ingredientView, LANGUAGES, translateUrl } from "@/lib/translate";
+import { recognizeFood, type Guess } from "@/lib/recognize";
+import { useStored } from "@/lib/use-stored";
 import { assessData, evaluate, headline } from "@/lib/verdict";
 import { ProfileSetup } from "./ProfileSetup";
+import { caffeineAmount, SavedLibrary, type SavedScan } from "./SavedLibrary";
 import { LookupProblem } from "./LookupProblem";
 import { VerdictBanner } from "./VerdictBanner";
 import { useProfile } from "./useProfile";
@@ -20,10 +23,34 @@ const FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e"];
 /* FDA guidance for healthy adults. */
 const CAFFEINE_DAILY_MG = 400;
 const EXAMPLES = [
-  { code: "5449000000996", label: "Coca-Cola" },
-  { code: "070847811169", label: "Monster" },
-  { code: "3017620422003", label: "Nutella" },
+  { query: "5449000000996", label: "Coca-Cola" },
+  { query: "070847811169", label: "Monster" },
+  { query: "3017620422003", label: "Nutella" },
+  { query: "espresso", label: "espresso" },
+  { query: "green tea", label: "green tea" },
 ];
+
+/** Downscale an image or video frame to a JPEG data URL. */
+function toJpeg(source: CanvasImageSource, width: number, height: number, max: number, quality = 0.85) {
+  const scale = Math.min(1, max / Math.max(width, height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
+  canvas.getContext("2d")!.drawImage(source, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", quality);
+}
+
+function loadImage(file: File) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => { URL.revokeObjectURL(url); resolve(image); };
+    image.onerror = () => { URL.revokeObjectURL(url); reject(new Error("That file isn't an image the browser can read.")); };
+    image.src = url;
+  });
+}
+
+type Results = { title: string; reports: FoodReport[]; warnings: string[] };
 
 async function createDetector(): Promise<{ detector: Detector; native: boolean }> {
   const NativeDetector = (globalThis as { BarcodeDetector?: { new (options: { formats: string[] }): Detector; getSupportedFormats: () => Promise<string[]> } }).BarcodeDetector;
@@ -60,6 +87,25 @@ export function FoodScanner() {
   const [failure, setFailure] = useState<LookupFailure | null>(null);
   const { profile, setProfile } = useProfile();
   const [history, setHistory] = useState<{ barcode: string; name: string; caffeine: number | null }[]>([]);
+  const [tab, setTab] = useState<"scan" | "saved">("scan");
+  const [results, setResults] = useState<Results | null>(null);
+  /** Search results the current report was opened from, for "Back to results". */
+  const [backTo, setBackTo] = useState<Results | null>(null);
+  /** Photo thumbnail and the recognizer's other guesses, for the current photo result. */
+  const [photo, setPhoto] = useState<{ thumb: string; alternatives: Guess[] } | null>(null);
+  const [busy, setBusy] = useState("");
+  const [saved, setSaved, savedLoaded] = useStored<SavedScan[]>("labelens-saved", []);
+
+  /* Show one result and clear whatever else was on screen. */
+  const show = useCallback((next: FoodReport | null, extra: { backTo?: Results | null; photo?: { thumb: string; alternatives: Guess[] } | null } = {}) => {
+    setReport(next);
+    setResults(null);
+    setFailure(null);
+    setError("");
+    setBackTo(extra.backTo ?? null);
+    setPhoto(extra.photo ?? null);
+    setTab("scan");
+  }, []);
 
   const lookup = useCallback(async (raw: string) => {
     const code = raw.replace(/\D/g, "");
@@ -69,7 +115,7 @@ export function FoodScanner() {
     setError("");
     setFailure(null);
     // Never leave the previous product on screen while another one is being looked up or has failed.
-    setReport(null);
+    show(null);
     try {
       const response = await fetch(`/api/food-scanner?barcode=${code}`);
       const result = await response.json().catch(() => ({})) as FoodReport & { error?: string };
@@ -85,7 +131,77 @@ export function FoodScanner() {
     } finally {
       setBusyCode("");
     }
+  }, [show]);
+
+  const run = useCallback(async (label: string, task: () => Promise<void>) => {
+    setBusy(label);
+    setError("");
+    try {
+      await task();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Something went wrong.");
+    } finally {
+      setBusy("");
+    }
   }, []);
+
+  const search = useCallback((query: string) => run(`Searching “${query}”…`, async () => {
+    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    const result = await response.json().catch(() => ({})) as { results?: FoodReport[]; warnings?: string[]; error?: string };
+    if (!response.ok || !result.results) throw new Error(result.error ?? "Search failed. Try again in a moment.");
+    if (!result.results.length) throw new Error(`No foods found for “${query}”.`);
+    show(null);
+    setResults({ title: `Results for “${query}”`, reports: result.results, warnings: result.warnings ?? [] });
+  }), [run, show]);
+
+  const showGuess = useCallback((guess: Guess, alternatives: Guess[], thumb: string, picked = false) => run(`Looking up ${guess.name}…`, async () => {
+    const confidence = picked ? "picked" : guess.probability >= 0.7 ? "high" : guess.probability >= 0.35 ? "medium" : "low";
+    const response = await fetch(`/api/identify?food=${encodeURIComponent(guess.name)}&confidence=${confidence}`);
+    const result = await response.json().catch(() => ({})) as FoodReport & { error?: string };
+    if (!response.ok) throw new Error(result.error ?? "Lookup failed.");
+    show(result, { photo: { thumb, alternatives: alternatives.filter((item) => item.name !== guess.name) } });
+  }), [run, show]);
+
+  /* Recognition runs entirely in the browser; only the recognized food's name goes to the server. */
+  const identify = useCallback((image: HTMLImageElement | HTMLVideoElement, width: number, height: number) => run("Recognizing food…", async () => {
+    const thumb = toJpeg(image, width, height, 240, 0.75);
+    const blob = await (await fetch(toJpeg(image, width, height, 512))).blob();
+    const { guesses, notFood } = await recognizeFood(blob, (percent) => setBusy(`Downloading the food model (one time, ~43 MB)… ${percent}%`));
+    if (notFood || !guesses.length) throw new Error("No food recognized in that photo. Try getting closer, or search by name.");
+    await showGuess(guesses[0], guesses, thumb);
+  }), [run, showGuess]);
+
+  function submit(value = manual) {
+    const text = value.trim();
+    if (!text) return;
+    setManual(text);
+    if (/^\d[\d\s-]{6,}$/.test(text)) void lookup(text);
+    else void search(text);
+  }
+
+  function captureFrame() {
+    const element = video.current;
+    if (element?.videoWidth) void identify(element, element.videoWidth, element.videoHeight);
+  }
+
+  async function uploadPhoto(file: File | undefined) {
+    if (!file) return;
+    try {
+      const image = await loadImage(file);
+      void identify(image, image.naturalWidth, image.naturalHeight);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not read that photo.");
+    }
+  }
+
+  const isSaved = report ? saved.some((scan) => reportId(scan.report) === reportId(report)) : false;
+  function toggleSave() {
+    if (!report) return;
+    const id = reportId(report);
+    setSaved((current) => current.some((scan) => reportId(scan.report) === id)
+      ? current.filter((scan) => reportId(scan.report) !== id)
+      : [{ report, savedAt: new Date().toISOString(), note: "", thumb: report.image ? null : photo?.thumb ?? null }, ...current]);
+  }
 
   const stopCamera = useCallback(() => {
     stream.current?.getTracks().forEach((track) => track.stop());
@@ -194,16 +310,20 @@ export function FoodScanner() {
           </span>
           <span>Labelens</span>
         </span>
+        <nav className="food-tabs" aria-label="Sections">
+          <button className={tab === "scan" ? "is-active" : ""} onClick={() => setTab("scan")} aria-current={tab === "scan" ? "page" : undefined}>Scan</button>
+          <button className={tab === "saved" ? "is-active" : ""} onClick={() => setTab("saved")} aria-current={tab === "saved" ? "page" : undefined}>Saved{savedLoaded && saved.length ? ` (${saved.length})` : ""}</button>
+        </nav>
       </header>
       <div className="tapp-title">
         <h1>Scan a food barcode</h1>
-        <p className="tapp-muted">Tell us what you avoid, then point your camera at a barcode to see what is in it.</p>
+        <p className="tapp-muted">Tell us what you avoid, then scan a barcode, photograph a food, or search by name to see what is in it.</p>
         <div className="food-bars" aria-hidden="true" />
       </div>
 
       <ProfileSetup profile={profile} onChange={setProfile} />
 
-      <div className="food-layout">
+      <div className="food-layout" hidden={tab !== "scan"}>
         <section className="tapp-panel">
           <div className="tapp-panel-head">
             <h2>Camera</h2>
@@ -224,9 +344,14 @@ export function FoodScanner() {
                 {cameraError && <p className="tapp-small" style={{ color: "var(--t-bad)", margin: 0 }}>{cameraError}</p>}
               </div>
             )}
-            {busyCode && <div className="food-status">Looking up {busyCode}…</div>}
+            {(busyCode || busy) && <div className="food-status">{busy || `Looking up ${busyCode}…`}</div>}
           </div>
           <div className="tapp-row" style={{ marginTop: ".75rem" }}>
+            {cameraState === "live" && <button className="tapp-btn tapp-btn-primary" onClick={captureFrame} disabled={!!busy}>Identify food in frame</button>}
+            <label className={`tapp-btn${cameraState === "live" ? "" : " tapp-btn-primary"}`} aria-disabled={!!busy}>
+              {cameraState === "live" ? "Upload a photo" : "Photo of food"}
+              <input type="file" accept="image/*" capture="environment" hidden disabled={!!busy} onChange={(event) => { void uploadPhoto(event.target.files?.[0]); event.target.value = ""; }} />
+            </label>
             {cameraState === "live" && <button className="tapp-btn tapp-btn-sm" onClick={stopCamera}>Stop camera</button>}
             {devices.length > 1 && (
               <select className="tapp-input" style={{ flex: "1 1 12rem", padding: ".3rem .5rem" }} value={deviceId} onChange={(event) => { setDeviceId(event.target.value); void startCamera(event.target.value); }} aria-label="Camera">
@@ -234,41 +359,72 @@ export function FoodScanner() {
               </select>
             )}
           </div>
-          <form className="tapp-row" style={{ marginTop: ".75rem" }} onSubmit={(event) => { event.preventDefault(); void lookup(manual); }}>
-            <input className="tapp-input" style={{ flex: "1 1 12rem" }} value={manual} onChange={(event) => setManual(event.target.value)} placeholder="Or type a barcode" aria-label="Barcode" inputMode="numeric" autoComplete="off" />
-            <button className="tapp-btn" type="submit" disabled={!!busyCode || !manual.trim()}>Look up</button>
+          <p className="tapp-small tapp-muted" style={{ margin: ".5rem 0 0" }}>Barcodes are read automatically. For fresh food, meals or drinks without a label, take a photo: it is recognized on this device and never uploaded.</p>
+          <form className="tapp-row" style={{ marginTop: ".75rem" }} onSubmit={(event) => { event.preventDefault(); submit(); }}>
+            <input className="tapp-input" style={{ flex: "1 1 12rem" }} value={manual} onChange={(event) => setManual(event.target.value)} placeholder="Barcode or food name, e.g. banana" aria-label="Barcode or food name" autoComplete="off" enterKeyHint="search" />
+            <button className="tapp-btn" type="submit" disabled={!!busyCode || !!busy || !manual.trim()}>Look up</button>
           </form>
           <div className="tapp-row tapp-small" style={{ marginTop: ".6rem" }}>
             <span className="tapp-muted">Try an example:</span>
-            {EXAMPLES.map((example) => <button key={example.code} className="tapp-btn tapp-btn-sm" onClick={() => void lookup(example.code)} disabled={!!busyCode}>{example.label}</button>)}
+            {EXAMPLES.map((example) => <button key={example.query} className="tapp-btn tapp-btn-sm" onClick={() => submit(example.query)} disabled={!!busyCode || !!busy}>{example.label}</button>)}
           </div>
           {error && <div className="tapp-notice is-bad" style={{ marginTop: "1rem", marginBottom: 0 }}><span>✕</span><span>{error}</span></div>}
         </section>
 
         <section className="tapp-panel food-results" aria-live="polite">
-          {!report && failure ? (
+          {!report && results ? (
+            <>
+              <div className="tapp-panel-head"><h2>{results.title}</h2></div>
+              {results.warnings.map((warning) => <p key={warning} className="tapp-small tapp-muted">{warning}</p>)}
+              <ul className="food-candidates">
+                {results.reports.map((item) => (
+                  <li key={reportId(item)}>
+                    <button onClick={() => show(item, { backTo: results })}>
+                      {/* eslint-disable-next-line @next/next/no-img-element -- remote product photos from Open Food Facts */}
+                      {item.image ? <img src={item.image} alt="" /> : <span className="food-saved-ph" aria-hidden="true">{item.generic ? "⌕" : "▦"}</span>}
+                      <span style={{ minWidth: 0 }}>
+                        <strong>{item.name}</strong>
+                        <span className="tapp-small tapp-muted">{[item.brand, item.generic ? "Typical recipe (USDA)" : item.sources[0]?.name].filter(Boolean).join(" · ")}</span>
+                      </span>
+                      {caffeineAmount(item) !== null && <span className="tapp-small food-candidate-mg">{Math.round(caffeineAmount(item)!)} mg</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : !report && failure ? (
             <LookupProblem failure={failure} words={watchFor(profile)} onRetry={() => void lookup(failure.code)} busy={!!busyCode} />
           ) : !report ? (
             <div className="tapp-empty">
               <p style={{ fontSize: "2rem", margin: 0 }} aria-hidden="true">▦</p>
-              <p>{busyCode ? `Looking up ${busyCode}…` : "Your result will show up here."}</p>
+              <p>{busyCode ? `Looking up ${busyCode}…` : busy || "Your result will show up here."}</p>
             </div>
           ) : (
             <>
+              {backTo && <button className="tapp-btn tapp-btn-sm" style={{ marginBottom: ".75rem" }} onClick={() => { show(null); setResults(backTo); }}>← Back to results</button>}
               <VerdictBanner headline={headline(findings)} findings={findings} quality={quality} hasProfile={!isEmptyProfile(profile)} />
               <div className="food-product">
-                {/* eslint-disable-next-line @next/next/no-img-element -- remote product photos from Open Food Facts */}
-                {report.image && <img src={report.image} alt="" />}
-                <div style={{ minWidth: 0 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element -- remote product photos and local photo thumbnails */}
+                {(report.image ?? photo?.thumb) && <img src={report.image ?? photo?.thumb} alt="" />}
+                <div style={{ minWidth: 0, flex: 1 }}>
                   <h2 style={{ margin: 0 }}>{report.name}</h2>
-                  <p className="tapp-muted" style={{ margin: ".15rem 0 .4rem" }}>{[report.brand, report.quantity].filter(Boolean).join(" · ") || "Unknown brand"}</p>
+                  <p className="tapp-muted" style={{ margin: ".15rem 0 .4rem" }}>{[report.brand, report.quantity].filter(Boolean).join(" · ") || (report.origin === "photo" ? "Recognized from your photo" : report.generic ? "Typical recipe, not a specific product" : "Unknown brand")}</p>
                   <div className="tapp-row">
-                    <span className="tapp-badge">{report.barcode}</span>
+                    {report.barcode && <span className="tapp-badge">{report.barcode}</span>}
+                    {report.photo && <span className={`tapp-badge ${report.photo.confidence === "picked" || report.photo.confidence === "high" ? "ok" : report.photo.confidence === "medium" ? "warn" : "bad"}`}>{report.photo.confidence === "picked" ? "Picked by you" : `${report.photo.confidence[0].toUpperCase()}${report.photo.confidence.slice(1)} confidence`}</span>}
                     {report.nutriscore && <span className={`tapp-badge ${"ab".includes(report.nutriscore) ? "ok" : report.nutriscore === "c" ? "warn" : "bad"}`}>Nutri-Score {report.nutriscore.toUpperCase()}</span>}
                     {report.nova && <span className={`tapp-badge ${report.nova <= 2 ? "ok" : report.nova === 3 ? "warn" : "bad"}`}>NOVA {report.nova}</span>}
                   </div>
                 </div>
+                <button className={`tapp-btn tapp-btn-sm${isSaved ? "" : " tapp-btn-primary"}`} onClick={toggleSave} aria-pressed={isSaved} style={{ flex: "none" }}>{isSaved ? "★ Saved" : "☆ Save"}</button>
               </div>
+              {photo && photo.alternatives.length > 0 && (
+                <div className="tapp-row tapp-small" style={{ marginTop: ".6rem" }}>
+                  <span className="tapp-muted">Not right? Did you mean</span>
+                  {photo.alternatives.map((guess) => <button key={guess.name} className="tapp-btn tapp-btn-sm" disabled={!!busy} onClick={() => void showGuess(guess, [...photo.alternatives, { name: report.name, probability: 0 }], photo.thumb, true)}>{guess.name}</button>)}
+                  <span className="tapp-muted">or search by name.</span>
+                </div>
+              )}
 
               <div className="food-caffeine">
                 <div className="tapp-spread" style={{ alignItems: "flex-end" }}>
@@ -328,14 +484,25 @@ export function FoodScanner() {
                     </p>
                   )}
                 </details>
-              ) : <p className="tapp-small tapp-muted" style={{ marginTop: "1rem" }}>No ingredient list is published for this product.</p>}
+              ) : <p className="tapp-small tapp-muted" style={{ marginTop: "1rem" }}>{report.generic ? `No ingredient list: this is a typical recipe (USDA “${report.generic.description}”), not a labelled product. Serving: ${report.servingSize ?? "100 g"}.` : "No ingredient list is published for this product."}</p>}
               <p className="tapp-small tapp-muted" style={{ marginTop: "1rem", marginBottom: 0 }}>Source: {report.sources.map((source, index) => <span key={source.name}>{index > 0 && " + "}<a href={source.url} target="_blank" rel="noreferrer">{source.name}</a></span>)} · {new Date(report.checkedAt).toLocaleTimeString()}</p>
             </>
           )}
         </section>
       </div>
 
-      {history.length > 0 && (
+      {tab === "saved" && (
+        <SavedLibrary
+          saved={saved}
+          profile={profile}
+          onOpen={(scan) => show(scan.report, { photo: scan.thumb ? { thumb: scan.thumb, alternatives: [] } : null })}
+          onDelete={(id) => setSaved((current) => current.filter((scan) => reportId(scan.report) !== id))}
+          onNote={(id, note) => setSaved((current) => current.map((scan) => reportId(scan.report) === id ? { ...scan, note } : scan))}
+          onClear={() => setSaved([])}
+        />
+      )}
+
+      {tab === "scan" && history.length > 0 && (
         <section className="tapp-panel" style={{ marginTop: "1rem" }}>
           <div className="tapp-panel-head"><h2>Recent scans</h2></div>
           <div className="tapp-table-wrap"><table className="tapp-table">

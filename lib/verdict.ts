@@ -20,6 +20,10 @@ export type Finding = {
 
 export type DataQuality = { state: "none" | "incomplete" | "ok"; reasons: string[] };
 
+/* Allergens that are animal products, for judging generic foods against vegan / vegetarian. */
+const VEGAN_ALLERGENS = ["milk", "eggs", "fish", "crustaceans", "molluscs"];
+const MEAT_ALLERGENS = ["fish", "crustaceans", "molluscs"];
+
 const ORDER: Record<Status, number> = { contains: 0, "may-contain": 1, unknown: 2, clear: 3 };
 const tagName = (tag: string) => tag.replace(/^[a-z]{2}:/i, "").replace(/-/g, " ");
 const listedItems = (text: string) => text.split(/[,;·•\n]+/).map((item) => item.trim()).filter(Boolean);
@@ -32,6 +36,7 @@ function ingredientText(report: FoodReport) {
 
 /** How far the ingredient data can be trusted to rule things out. */
 export function assessData(report: FoodReport): DataQuality {
+  if (report.generic) return { state: "none", reasons: ["This is a typical recipe from USDA, not a labelled product, so there is no ingredient list."] };
   const text = ingredientText(report);
   if (!text.trim() && report.ingredientTags.length === 0) return { state: "none", reasons: ["No ingredient list is published for this product."] };
 
@@ -104,6 +109,19 @@ export function evaluate(report: FoodReport, profile: Profile): Finding[] {
     // Open Food Facts' own vegan / vegetarian guess can add a hit, never remove one.
     if (rule.id === "vegan" && report.analysis.includes("en:non-vegan")) { raise("contains"); evidence.push("Open Food Facts marks this product non-vegan"); }
     if ((rule.id === "vegetarian" || rule.id === "vegan") && report.analysis.includes("en:non-vegetarian")) { raise("contains"); evidence.push("Open Food Facts marks this product non-vegetarian"); }
+
+    // Generic foods (search and photo results) have no label: judge the usual recipe, but never above "may contain".
+    if (report.generic) {
+      for (const match of matchRule(rule, { tags: [], text: report.generic.description })) {
+        if (match.strength === "note") continue;
+        raise("may-contain");
+        evidence.push(`${match.term} (usual recipe)`);
+      }
+      const typical = report.generic.typicalAllergens;
+      if (rule.kind === "allergen" && typical.includes(rule.id)) { raise("may-contain"); evidence.push(`${rule.id} (usually in this food)`); }
+      const animal = typical.filter((name) => (rule.id === "vegan" ? VEGAN_ALLERGENS : rule.id === "vegetarian" ? MEAT_ALLERGENS : []).includes(name));
+      if (animal.length) { raise("may-contain"); evidence.push(`${animal.join(", ")} (usually in this food)`); }
+    }
 
     // Labels are crowd-edited, so they only add a note and never lower a finding.
     const label = LABEL_NOTES[rule.id];

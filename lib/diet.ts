@@ -58,7 +58,7 @@ const PORK = [
 const PORK_TAGS = ["en:pork", "en:pork-meat", "en:lard", "en:bacon", "en:ham", "en:pork-fat", "en:pork-rind", "en:prosciutto", "en:pancetta"];
 
 /* Often animal, often from pork. The label rarely says which. */
-const AMBIGUOUS_ANIMAL_TERMS = ["gelatin", "gelatine", "gélatine", "gelatina", "gelatin", "animal fat", "animal fats", "animal shortening", "sausage", "salami", "mortadella", "chorizo", "saucisse", "wurst"];
+const AMBIGUOUS_ANIMAL_TERMS = ["gelatin", "gelatine", "gélatine", "gelatina", "gelatin", "animal fat", "animal fats", "animal shortening", "sausage", "salami", "pepperoni", "mortadella", "chorizo", "saucisse", "wurst"];
 const AMBIGUOUS_E = ["E441", "E471", "E472a", "E472b", "E472c", "E472e", "E477", "E542", "E920", "E631", "E627"];
 const ORIGIN_UNSTATED = ["natural flavour", "natural flavours", "natural flavor", "natural flavors", "flavouring", "flavoring", "arôme naturel", "arômes naturels", "aroma natural", "natürliches aroma", "natürliche aromen"];
 
