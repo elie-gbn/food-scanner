@@ -453,3 +453,110 @@ body {
 .food-product { display: flex; gap: 1rem; align-items: flex-start; }
 .food-product img { width: 5.5rem; height: 5.5rem; object-fit: contain; flex: none; background: #fff; border: 1px solid var(--t-line); }
 .food-caffeine { margin-top: 1rem; padding: .8rem 1rem; border: 1px solid var(--t-line-strong); background: var(--t-bg-raised); }
+
+
+.tapp-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.tapp-kpi {
+  padding: .8rem 1rem;
+  border: 1px solid var(--t-line);
+}
+
+.tapp-kpi span {
+  display: block;
+  color: var(--t-dim);
+  font-size: .68rem;
+  letter-spacing: .12em;
+}
+
+.tapp-kpi strong {
+  display: block;
+  color: var(--t-ink);
+  font-size: 1.5rem;
+  line-height: 1.3;
+}
+
+.tapp-kpi small {
+  color: var(--t-dim);
+  font-size: .72rem;
+}
+
+
+.tapp-btn-danger {
+  border-color: #7a2d2d;
+  color: #ffb3b3;
+}
+
+.tapp-btn-danger:hover:not(:disabled) {
+  border-color: var(--t-bad);
+  background: #1a0606;
+  color: #ffd6d6;
+}
+
+
+.tapp-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--t-line);
+}
+
+.tapp-tabs button {
+  margin-bottom: -1px;
+  padding: .5rem .9rem;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--t-dim);
+  font: inherit;
+  font-size: .8rem;
+  cursor: pointer;
+}
+
+.tapp-tabs button:hover {
+  color: var(--t-ink);
+}
+
+.tapp-tabs button.is-active {
+  border-color: var(--t-line);
+  border-bottom-color: var(--t-bg);
+  background: var(--t-bg);
+  color: var(--t-hot);
+}
+
+
+/* Tabs in the header, allergen profile, candidates, and saved library. */
+.food-layout[hidden] { display: none; }
+.food-tabs { margin: 0; border-bottom: 0; }
+.food-tabs button.is-active { border-bottom-color: var(--t-line); }
+.food-profile { margin-bottom: 1rem; padding: .6rem 1rem; }
+.food-profile-toggle { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 1rem; padding: 0; border: 0; background: none; color: var(--t-ink); font: inherit; text-align: left; cursor: pointer; }
+.food-chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .75rem; }
+.food-chip { padding: .3rem .65rem; border: 1px solid var(--t-line); background: none; color: var(--t-dim); font: inherit; font-size: .78rem; cursor: pointer; }
+.food-chip:hover { color: var(--t-ink); border-color: var(--t-line-strong); }
+.food-chip.is-on { border-color: var(--t-bad); color: var(--t-bad); background: rgba(255, 107, 107, .08); }
+.food-allergens { margin-top: 1rem; }
+.food-alert { margin: 0; }
+.food-allergen-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .3rem .9rem; margin: 0; padding: 0; list-style: none; }
+.food-allergen-grid li { display: flex; justify-content: space-between; align-items: center; gap: .5rem; padding: .25rem 0; border-bottom: 1px dotted var(--t-line); font-size: .78rem; color: var(--t-dim); }
+.food-allergen-grid li.is-flagged { color: var(--t-ink); }
+.food-allergen-grid li.is-mine.is-flagged { color: var(--t-bad); font-weight: 700; }
+.food-candidates, .food-saved { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }
+.food-candidates button, .food-saved-main { display: flex; width: 100%; gap: .75rem; align-items: center; padding: .6rem; border: 1px solid var(--t-line); background: none; color: var(--t-ink); font: inherit; text-align: left; cursor: pointer; }
+.food-candidates button:hover:not(:disabled), .food-saved-main:hover { border-color: var(--t-hot); background: #07160c; }
+.food-candidates button:disabled { cursor: default; opacity: .6; }
+.food-candidates button > span:first-of-type, .food-saved-main > span:last-child { display: grid; flex: 1; }
+.food-candidates img, .food-saved img, .food-saved-ph { width: 3rem; height: 3rem; flex: none; object-fit: cover; background: #fff; border: 1px solid var(--t-line); }
+.food-saved-ph { display: grid; place-items: center; background: var(--t-bg-raised); color: var(--t-dim); font-size: 1.3rem; }
+.food-candidate-mg { flex: none; color: var(--t-info); }
+.food-saved li { padding: .6rem; border: 1px solid var(--t-line); }
+.food-saved .food-saved-main { padding: 0; border: 0; }
+.food-saved .food-saved-main:hover { background: none; }
+.food-saved .food-saved-main:hover .food-saved-name { color: var(--t-hot); text-decoration: underline; }
+.food-kpis { margin-bottom: 1rem; }
+label.tapp-btn { display: inline-flex; align-items: center; }
