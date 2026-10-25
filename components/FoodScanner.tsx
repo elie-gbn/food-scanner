@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FoodReport } from "@/lib/report";
+import { ProfileSetup } from "./ProfileSetup";
+import { useProfile } from "./useProfile";
 
 type Point = { x: number; y: number };
 type Detected = { rawValue: string; cornerPoints: Point[] };
@@ -10,9 +12,6 @@ type Detector = { detect: (source: HTMLVideoElement) => Promise<Detected[]> };
 const FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e"];
 /* FDA guidance for healthy adults. */
 const CAFFEINE_DAILY_MG = 400;
-/* Names as app/api/food-scanner/route.ts returns them (Open Food Facts allergen tags, prefix stripped). */
-const ALLERGEN_CHOICES = ["gluten", "milk", "eggs", "peanuts", "nuts", "soybeans", "fish", "crustaceans", "molluscs", "sesame seeds", "celery", "mustard", "sulphur dioxide and sulphites", "lupin"];
-const ALLERGEN_STORAGE_KEY = "labelens-my-allergens";
 const EXAMPLES = [
   { code: "5449000000996", label: "Coca-Cola" },
   { code: "070847811169", label: "Monster" },
@@ -51,7 +50,8 @@ export function FoodScanner() {
   const [report, setReport] = useState<FoodReport | null>(null);
   const [busyCode, setBusyCode] = useState("");
   const [error, setError] = useState("");
-  const [myAllergens, setMyAllergens] = useState<string[]>([]);
+  const { profile, setProfile } = useProfile();
+  const myAllergens = profile.allergens;
   const [history, setHistory] = useState<{ barcode: string; name: string; caffeine: number | null }[]>([]);
 
   const lookup = useCallback(async (raw: string) => {
@@ -73,26 +73,6 @@ export function FoodScanner() {
       setBusyCode("");
     }
   }, []);
-
-  useEffect(() => {
-    try {
-      const saved: unknown = JSON.parse(localStorage.getItem(ALLERGEN_STORAGE_KEY) ?? "[]");
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after hydration
-      if (Array.isArray(saved)) setMyAllergens(saved.filter((item): item is string => typeof item === "string"));
-    } catch {
-      // Storage can be blocked or hold bad JSON; start with no saved allergens.
-    }
-  }, []);
-
-  const toggleAllergen = (name: string) => {
-    const next = myAllergens.includes(name) ? myAllergens.filter((item) => item !== name) : [...myAllergens, name];
-    setMyAllergens(next);
-    try {
-      localStorage.setItem(ALLERGEN_STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      // Not persisted; the choice still applies until the page closes.
-    }
-  };
 
   const stopCamera = useCallback(() => {
     stream.current?.getTracks().forEach((track) => track.stop());
@@ -199,6 +179,8 @@ export function FoodScanner() {
         <p className="tapp-muted">Point your camera at a barcode to see caffeine, nutrition and allergens.</p>
       </div>
 
+      <ProfileSetup profile={profile} onChange={setProfile} />
+
       <div className="food-layout">
         <section className="tapp-panel">
           <div className="tapp-panel-head">
@@ -238,16 +220,6 @@ export function FoodScanner() {
             <span className="tapp-muted">Try an example:</span>
             {EXAMPLES.map((example) => <button key={example.code} className="tapp-btn tapp-btn-sm" onClick={() => void lookup(example.code)} disabled={!!busyCode}>{example.label}</button>)}
           </div>
-          <details style={{ marginTop: ".75rem" }}>
-            <summary style={{ cursor: "pointer", fontWeight: 600 }}>My allergens{myAllergens.length > 0 && ` (${myAllergens.length})`}</summary>
-            <div className="food-allergens">
-              {ALLERGEN_CHOICES.map((name) => (
-                <label key={name} className="food-chip tapp-small">
-                  <input type="checkbox" checked={myAllergens.includes(name)} onChange={() => toggleAllergen(name)} />{name}
-                </label>
-              ))}
-            </div>
-          </details>
           {error && <div className="tapp-notice is-bad" style={{ marginTop: "1rem", marginBottom: 0 }}><span>✕</span><span>{error}</span></div>}
         </section>
 
