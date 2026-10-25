@@ -26,7 +26,9 @@ async function createDetector(): Promise<{ detector: Detector; native: boolean }
     const formats = FORMATS.filter((format) => supported.includes(format));
     if (formats.length) return { detector: new NativeDetector({ formats }), native: true };
   }
-  const { BarcodeDetector } = await import("barcode-detector/ponyfill");
+  const { BarcodeDetector, setZXingModuleOverrides } = await import("barcode-detector/ponyfill");
+  // Serve the decoder from /public so scanning does not depend on reaching a CDN.
+  setZXingModuleOverrides({ locateFile: (path, prefix) => path.endsWith(".wasm") ? "/zxing_reader.wasm" : prefix + path });
   return { detector: new BarcodeDetector({ formats: FORMATS as never[] }) as unknown as Detector, native: false };
 }
 
@@ -38,6 +40,7 @@ export function FoodScanner() {
   const detector = useRef<Detector | null>(null);
   const candidate = useRef<{ code: string; hits: number }>({ code: "", hits: 0 });
   const lastLookup = useRef("");
+  const failures = useRef(0);
 
   const [cameraState, setCameraState] = useState<"idle" | "starting" | "live" | "error">("idle");
   const [cameraError, setCameraError] = useState("");
@@ -111,8 +114,10 @@ export function FoodScanner() {
     try {
       const media = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: id ? { deviceId: { exact: id }, width: { ideal: 1280 }, height: { ideal: 720 } } : { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: id ? { deviceId: { exact: id }, width: { ideal: 1920 }, height: { ideal: 1080 } } : { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
       });
+      // Webcams often default to fixed focus; ask for autofocus where the camera supports it.
+      await media.getVideoTracks()[0]?.applyConstraints({ advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet] }).catch(() => {});
       stream.current = media;
       if (video.current) {
         video.current.srcObject = media;
@@ -157,8 +162,10 @@ export function FoodScanner() {
             setBox(null);
             candidate.current = { code: "", hits: 0 };
           }
+          failures.current = 0;
         } catch {
-          // A frame can fail to decode while the camera refocuses; the next tick tries again.
+          // A frame can fail to decode while the camera refocuses; keep trying, but say so if it never recovers.
+          if (++failures.current === 15) setError("The barcode reader isn't working. Type the barcode below instead.");
         }
       }
       if (!cancelled) timer = setTimeout(tick, 180);
@@ -206,6 +213,7 @@ export function FoodScanner() {
               </svg>
             )}
             {cameraState === "live" && !box && <div className="food-reticle" aria-hidden="true" />}
+            {cameraState === "live" && !box && <div className="food-status">Hold the barcode flat inside the corners</div>}
             {cameraState !== "live" && (
               <div className="food-placeholder">
                 <button className="tapp-btn tapp-btn-primary" onClick={() => void startCamera(deviceId)} disabled={cameraState === "starting"}>{cameraState === "starting" ? "Starting camera…" : "Start camera"}</button>
@@ -281,7 +289,7 @@ export function FoodScanner() {
                     ) : caffeine?.signals.length ? (
                       <p style={{ margin: ".3rem 0 0", color: "var(--t-warn)" }}>Contains caffeine, but the amount isn&apos;t published</p>
                     ) : (
-                      <p style={{ margin: ".3rem 0 0", color: "var(--t-accent)" }}>No caffeine found</p>
+                      <p style={{ margin: ".3rem 0 0", color: report.ingredients ? "var(--t-accent)" : "var(--t-dim)" }}>{report.ingredients ? "No caffeine found" : "No caffeine data for this product"}</p>
                     )}
                   </div>
                   {caffeine && (caffeine.perServing !== null || caffeine.perContainer !== null || caffeine.per100 !== null) && (
